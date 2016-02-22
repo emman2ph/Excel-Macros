@@ -1,0 +1,369 @@
+Option Explicit
+Option Base 1
+
+'For New Masters, Please do manual update in the offsheet. This procedure only works for the new direct resellers
+
+Sub OffsheetMacro()
+
+Dim sTemplate As String
+Dim iRowLooper As Integer
+Dim sCurrentReseller As String
+Dim sDate As String
+Dim sColumnLetter As String
+Dim iRowNumber As Integer
+Dim iCountOfResellersInStatementList As Integer
+Dim iCountOfResellersInResidualList As Integer
+Dim rngResellerListUpfrontOffsheet  As Range
+Dim wsUseThisStatementWorksheet As Worksheet
+
+sTemplate = ActiveWorkbook.Name
+Call Assign_Sheets.Assign_Sheets
+
+'Count the number of resellers in the lists
+iCountOfResellersInStatementList = ws_Pivots.Range("A2:" & ws_Pivots.Range("A" & Last_Row).End(xlUp).Address).Count
+iCountOfResellersInResidualList = ws_Pivots.Range("E2:" & ws_Pivots.Range("E" & Last_Row).End(xlUp).Address).Count
+
+'Put in the new resellers first using the ResellerCheck Procedure
+Call ResellerCheck
+
+sDate = Left(ws_Statement.Range("B5").Value, 3) 'Get the month code
+
+'Run Offsheet for Resellers in the Statement List
+Call FillOffSheetTabs(iCountOfResellersInStatementList, ColumnLetter(sDate), ws_Statement, "A")
+Call FillOffSheetTabs(iCountOfResellersInResidualList, ColumnLetter(sDate), ws_Residual, "E")
+
+'Sum quarterly values
+
+
+
+
+
+End Sub
+
+Sub ResellerCheck()
+
+'Check which resellers are not yet in the offsheet
+Call Assign_Sheets.Assign_Sheets
+
+'Place formula to determine if resellers are already in the offsheet table
+With ws_Pivots
+    .Activate
+    .AutoFilterMode = False
+End With
+
+'Count formulas to check if the resellers are in the offsheet already.
+Range("D" & "2").Value = "=COUNTIFS('OffSheet - Upfront'!$B:$B,'Pivots&Lookups'!$A2)" 'Place formula in Column D to check if the reseller is in the Upfront tab already
+Range("D2:" & Range("A" & Last_Row).End(xlUp).Offset(0, 3).Address).FillDown
+
+Range("I2").Value = "=COUNTIFS('OffSheet - Upfront'!$B:$B,'Pivots&Lookups'!$E2)" 'Place formula in Column D to check if the reseller is in the Upfront tab already
+Range("I2:" & Range("E" & Last_Row).End(xlUp).Offset(0, 4).Address).FillDown
+
+'Filter for the resellers that are not yet in the offsheet tab
+Range("D1:" & Range("A" & Last_Row).End(xlUp).Offset(0, 3).Address).AutoFilter field:=1, Criteria1:=0, visibledropdown:=True
+
+'Copy the new resellers from the statement list (Column A)
+
+    If Range("A" & Last_Row).End(xlUp).Address <> "$A$1" Then
+
+        With Range("A2:" & Range("A" & Last_Row).End(xlUp).Address) 'copy the visible cells after filter
+            .SpecialCells xlCellTypeVisible
+            .copy
+        End With
+        
+        'Copy to the Upfront Tab
+        ws_Offsheet_Upfront.Activate
+        Range("B" & Last_Row).End(xlUp).Offset(1, 0).PasteSpecial xlPasteValuesAndNumberFormats
+        
+        'Copy to the Residual Tab
+        ws_Offsheet_Residual.Activate
+        Range("B" & Last_Row).End(xlUp).Offset(1, 0).PasteSpecial xlPasteValuesAndNumberFormats
+        
+        'Copy to the Chargeback Tab
+        ws_Offsheet_Chargeback.Activate
+        Range("B" & Last_Row).End(xlUp).Offset(1, 0).PasteSpecial xlPasteValuesAndNumberFormats
+    
+    End If
+
+'Remove filters from the pivots and lookups table for the next pasting
+With ws_Pivots
+    .Activate
+    .AutoFilterMode = False
+End With
+
+'Filter for the resellers that are not yet in the offsheet tab
+Range("I1:" & Range("E" & Last_Row).End(xlUp).Offset(0, 4).Address).AutoFilter field:=1, Criteria1:=0, visibledropdown:=True
+
+'Copy the new resellers from the residual list (Column A)
+    
+    If Range("E" & Last_Row).End(xlUp).Address <> "$E$1" Then
+    
+        With Range("E2:" & Range("E" & Last_Row).End(xlUp).Address) 'copy the visible cells after filter
+            .SpecialCells xlCellTypeVisible
+            .copy
+        End With
+        
+        'Copy to the Upfront Tab
+        ws_Offsheet_Upfront.Activate
+        Range("B" & Last_Row).End(xlUp).Offset(1, 0).PasteSpecial xlPasteValuesAndNumberFormats
+        
+        'Copy to the Residual Tab
+        ws_Offsheet_Residual.Activate
+        Range("B" & Last_Row).End(xlUp).Offset(1, 0).PasteSpecial xlPasteValuesAndNumberFormats
+        
+        'Copy to the chargeback Tab
+        ws_Offsheet_Chargeback.Activate
+        Range("B" & Last_Row).End(xlUp).Offset(1, 0).PasteSpecial xlPasteValuesAndNumberFormats
+    
+    End If
+    
+With ws_Pivots
+    .Activate
+    .AutoFilterMode = False
+    .Application.CutCopyMode = False
+End With
+
+End Sub
+
+Function ColumnLetter(sDate) As String
+
+'Determine ColumnLetter in the Offsheet tabs to be filled up based on the date
+
+If sDate = "Jan" Then
+    ColumnLetter = "D"
+ElseIf sDate = "Feb" Then
+    ColumnLetter = "E"
+ElseIf sDate = "Mar" Then
+    ColumnLetter = "F"
+ElseIf sDate = "Apr" Then
+    ColumnLetter = "H"
+ElseIf sDate = "May" Then
+    ColumnLetter = "I"
+ElseIf sDate = "Jun" Then
+    ColumnLetter = "J"
+ElseIf sDate = "Jul" Then
+    ColumnLetter = "L"
+ElseIf sDate = "Aug" Then
+    ColumnLetter = "M"
+ElseIf sDate = "Sep" Then
+    ColumnLetter = "N"
+ElseIf sDate = "Oct" Then
+    ColumnLetter = "P"
+ElseIf sDate = "Nov" Then
+    ColumnLetter = "Q"
+ElseIf sDate = "Dec" Then
+    ColumnLetter = "R"
+End If
+
+End Function
+
+Sub FillOffSheetTabs(CountOfReseller As Integer, sColumnLetterInOffsheet As String, StatementToBeUsed As Worksheet, sPivotsColumnLetter As String)
+
+Dim iRowLooper As Integer
+Dim sCurrentReseller As String
+Dim rngResellerListUpfrontOffsheet As Range
+Dim rngResellerListResidualOffsheet As Range
+Dim rngResellerListChargebackOffsheet As Range
+Dim iRowNumberUpfront As Integer
+Dim iRowNumberResidual As Integer
+Dim iRowNumberChargeback As Integer
+Dim sResellerMaster As String
+
+Set rngResellerListUpfrontOffsheet = ws_Offsheet_Upfront.Range("B1:" & ws_Offsheet_Upfront.Range("B" & Last_Row).End(xlUp).Address)
+Set rngResellerListResidualOffsheet = ws_Offsheet_Residual.Range("B1:" & ws_Offsheet_Residual.Range("B" & Last_Row).End(xlUp).Address)
+Set rngResellerListChargebackOffsheet = ws_Offsheet_Chargeback.Range("B1:" & ws_Offsheet_Chargeback.Range("B" & Last_Row).End(xlUp).Address)
+
+For iRowLooper = 2 To (CountOfReseller + 1)
+    
+    sCurrentReseller = ws_Pivots.Range(sPivotsColumnLetter & iRowLooper).Value
+    
+    If StatementToBeUsed.Name = "Statement" Then
+        
+        ws_Statement.Range("B4").Value = sCurrentReseller
+        sResellerMaster = ws_Statement.Range("B20").Value
+        
+    Else
+    
+        ws_Residual.Range("B4").Value = sCurrentReseller
+        sResellerMaster = ws_Residual.Range("B18").Value
+    
+    End If
+    
+    'Fill Upfront Offsheet tab
+    
+    On Error Resume Next
+    iRowNumberUpfront = Application.WorksheetFunction.Match(sCurrentReseller, rngResellerListUpfrontOffsheet, 0)
+    iRowNumberResidual = Application.WorksheetFunction.Match(sCurrentReseller, rngResellerListResidualOffsheet, 0)
+    iRowNumberChargeback = Application.WorksheetFunction.Match(sCurrentReseller, rngResellerListChargebackOffsheet, 0)
+    
+    If Err.Number <> 0 Then
+        
+        MsgBox (sCurrentReseller)
+    
+    End If
+    
+    On Error GoTo 0
+    
+    'Condition to follow if the tab used is the statement tab
+    If StatementToBeUsed.Name = "Statement" Then
+    
+        'Fill the currency field
+            ws_Offsheet_Upfront.Activate 'fill the currency field in the Upfront Tab
+            
+            If Range("C" & iRowNumberUpfront).Value = "" Then 'If the currency is already filled up, leave as is
+            
+                Range("C" & iRowNumberUpfront).Value = ws_Statement.Range("B6").Value 'Place the currency value found in the Statement tab
+                
+            End If
+            
+                Range("A" & iRowNumberUpfront).Value = sResellerMaster
+            
+            ws_Offsheet_Residual.Activate 'fill the currency field in the Residual Tab
+            
+             If Range("C" & iRowNumberResidual).Value = "" Then 'If the currency is already filled up, leave as is
+            
+                Range("C" & iRowNumberResidual).Value = ws_Statement.Range("B6").Value 'Place the currency value found in the Statement tab
+                
+            End If
+            
+                Range("A" & iRowNumberResidual).Value = sResellerMaster
+            
+            ws_Offsheet_Chargeback.Activate 'fill the currency field in the Residual Tab
+            
+             If Range("C" & iRowNumberChargeback).Value = "" Then 'If the currency is already filled up, leave as is
+            
+                Range("C" & iRowNumberChargeback).Value = ws_Statement.Range("B6").Value 'Place the currency value found in the Statement tab
+              
+            End If
+                      
+                Range("A" & iRowNumberChargeback).Value = sResellerMaster
+    
+        'Fill the values using the Statement tab
+            
+            On Error Resume Next 'Check for error if the value of the B11 in the statement is not an integer
+                
+                If IsNumeric(ws_Statement.Range("B11").Value) = True Then 'Only proceed with pasting of upfront data if the reseller is really paid a commission
+                
+                    If Err.Number = 0 Then 'Paste data if there is no error
+                        
+                        ws_Offsheet_Upfront.Activate 'Paste Upfront value to Upfront tab
+                            
+                            Range(sColumnLetterInOffsheet & iRowNumberUpfront).Value = ws_Statement.Range("B8").Value
+                        
+                        ws_Offsheet_Residual.Activate 'Paste Residual value to Residual tab
+                            
+                            Range(sColumnLetterInOffsheet & iRowNumberResidual).Value = ws_Statement.Range("B9").Value
+                            
+                        ws_Offsheet_Chargeback.Activate 'Paste Chargeback value to Residual tab
+                            
+                            Range(sColumnLetterInOffsheet & iRowNumberChargeback).Value = ws_Statement.Range("B10").Value
+                            
+                    Else 'Put zero in the cells if there is an error in the Cell B11 of the statement tab for the given reseller
+                    
+                        ws_Offsheet_Upfront.Activate 'Paste Upfront value to Upfront tab
+                                
+                                Range(sColumnLetterInOffsheet & iRowNumberUpfront).Value = 0
+                            
+                        ws_Offsheet_Residual.Activate 'Paste Residual value to Residual tab
+                                
+                                Range(sColumnLetterInOffsheet & iRowNumberResidual).Value = 0
+                        
+                        ws_Offsheet_Chargeback.Activate 'Paste Chargeback value to Residual tab
+                                
+                                Range(sColumnLetterInOffsheet & iRowNumberChargeback).Value = 0
+                                
+                    End If
+                
+                End If
+            
+            On Error GoTo 0 'Revert to system error codes
+    
+    Else
+        
+        'Fill the currency field
+            ws_Offsheet_Upfront.Activate 'fill the currency field in the Upfront Tab
+            
+            If Range("C" & iRowNumberUpfront).Value = "" Then 'If the currency is already filled up, leave as is
+            
+                Range("C" & iRowNumberUpfront).Value = ws_Residual.Range("B6").Value 'Place the currency value found in the Statement tab
+                
+            End If
+            
+            Range("A" & iRowNumberUpfront).Value = sResellerMaster
+            
+            ws_Offsheet_Residual.Activate 'fill the currency field in the Residual Tab
+            
+             If Range("C" & iRowNumberResidual).Value = "" Then 'If the currency is already filled up, leave as is
+            
+                Range("C" & iRowNumberResidual).Value = ws_Residual.Range("B6").Value 'Place the currency value found in the Statement tab
+               
+            End If
+            
+             Range("A" & iRowNumberResidual).Value = sResellerMaster
+             
+             ws_Offsheet_Chargeback.Activate 'fill the currency field in the Residual Tab
+            
+             If Range("C" & iRowNumberChargeback).Value = "" Then 'If the currency is already filled up, leave as is
+            
+                Range("C" & iRowNumberChargeback).Value = ws_Residual.Range("B6").Value 'Place the currency value found in the Statement tab
+               
+            End If
+            
+             Range("A" & iRowNumberChargeback).Value = sResellerMaster
+            
+            
+        On Error Resume Next 'Check for error if the value of the B11 in the residual is not an integer
+            
+            If IsNumeric(ws_Residual.Range("B11").Value) = True Then 'Only proceed with pasting of upfront data if the reseller is really paid a commission
+            
+                If Err.Number = 0 Then 'Paste data if there is no error
+                    
+                    ws_Offsheet_Residual.Activate 'Paste Residual value to Residual tab
+                    
+                        Range(sColumnLetterInOffsheet & iRowNumberResidual).Value = ws_Residual.Range("B11").Value
+                        
+                    ws_Offsheet_Upfront.Activate 'Paste Residual value to Residual tab
+                    
+                        Range(sColumnLetterInOffsheet & iRowNumberUpfront).Value = 0
+                    
+                    ws_Offsheet_Chargeback.Activate 'Paste Residual value to Residual tab
+                    
+                        Range(sColumnLetterInOffsheet & iRowNumberChargeback).Value = 0
+                        
+                Else 'Put zero in the cells if there is an error in the Cell B11 of the statement tab for the given reseller
+                     
+                    ws_Offsheet_Residual.Activate 'Paste Residual value to Residual tab
+                    
+                        Range(sColumnLetterInOffsheet & iRowNumberResidual).Value = 0
+                    
+                    ws_Offsheet_Upfront.Activate 'Paste Residual value to Residual tab
+                    
+                        Range(sColumnLetterInOffsheet & iRowNumberUpfront).Value = 0
+                    
+                    ws_Offsheet_Chargeback.Activate 'Paste Residual value to Residual tab
+                    
+                        Range(sColumnLetterInOffsheet & iRowNumberChargeback).Value = 0
+                        
+                End If
+                
+            End If
+        
+        On Error GoTo 0 'Revert to system error codes
+        
+    End If
+        
+Next iRowLooper
+
+End Sub
+
+'Sub to check if there is any value within the quarter. If there is then summation formula in the quarter column
+Sub quarterlySum(offsheetSheetName As String, loopCount As Integer)
+
+
+
+
+
+
+
+
+End Sub
+
