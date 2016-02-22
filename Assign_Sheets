@@ -1,0 +1,48 @@
+Option Explicit
+Option Base 1
+
+'Assign names for public variables to be used all throughout the template
+Public ws_Statement As Worksheet
+Public ws_Residual As Worksheet
+Public ws_Pivots As Worksheet
+Public ws_Incremental As Worksheet
+Public ws_Total As Worksheet
+Public ws_Multiplier As Worksheet
+Public ws_Commissions_Accrued As Worksheet
+Public ws_Chargeback As Worksheet
+Public ws_Netsuite_Masters As Worksheet
+Public ws_Netsuite_Direct As Worksheet
+Public ws_Offsheet_Upfront As Worksheet
+Public ws_Offsheet_Residual As Worksheet
+Public ws_File_Location_Master As Worksheet
+Public ws_File_Location_Direct As Worksheet
+Public ws_Reseller_SF_Data As Worksheet
+Public ws_Offsheet_Chargeback As Worksheet
+Public s_Workbook_Name As String
+
+
+'number of last row in the worksheet. Used for the End(xlup) procedure
+Public Const Last_Row = 1048576
+
+Public Sub Assign_Sheets() 'Assign names to worksheet for easier coding (using ctrl+space after typing a few letters of the name will allow autocomplete)
+
+Set ws_Statement = ActiveWorkbook.Sheets("Statement")
+Set ws_Residual = ActiveWorkbook.Sheets("Residual Only")
+Set ws_Pivots = ActiveWorkbook.Sheets("Pivots&Lookups")
+Set ws_Incremental = ActiveWorkbook.Sheets("Incremental Sales")
+Set ws_Total = ActiveWorkbook.Sheets("Total Sales")
+Set ws_Commissions_Accrued = ActiveWorkbook.Sheets("Commissions Accrued")
+Set ws_Chargeback = ActiveWorkbook.Sheets("Chargeback")
+Set ws_Netsuite_Masters = ActiveWorkbook.Sheets("Netsuite - Masters")
+Set ws_Netsuite_Direct = ActiveWorkbook.Sheets("Netsuite - Direct")
+Set ws_Offsheet_Upfront = ActiveWorkbook.Sheets("OffSheet - Upfront")
+Set ws_Offsheet_Residual = ActiveWorkbook.Sheets("Offsheet - Residual")
+Set ws_File_Location_Master = ActiveWorkbook.Sheets("File Location - Master")
+Set ws_File_Location_Direct = ActiveWorkbook.Sheets("File Location - Direct")
+Set ws_Reseller_SF_Data = ActiveWorkbook.Sheets("Reseller SF Data")
+Set ws_Multiplier = ActiveWorkbook.Sheets("Multiplier Tables")
+Set ws_Offsheet_Chargeback = ActiveWorkbook.Sheets("Offsheet - Chargeback")
+
+s_Workbook_Name = ActiveWorkbook.Name 'Name of the current workbook used for "alt+tab" procedure
+
+End Sub
