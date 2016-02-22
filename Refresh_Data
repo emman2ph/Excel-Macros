@@ -1,0 +1,450 @@
+Option Explicit
+Option Base 1
+
+'Repopulate Formula fields and List resellers
+
+Sub Main_Refresh_Data()
+
+Application.ScreenUpdating = False
+
+Call Assign_Sheets.Assign_Sheets
+
+'Check if raw data tabs are empty
+If ws_Total.Range("B1").End(xlDown).Address = "$B$" Or ws_Total.Range("B2").End(xlDown).Address = "$B$" & Last_Row Then
+    
+    Beep
+    MsgBox ("Incremental Sales and/or Total Sales tabs are empty. Load data before file generation."), vbCritical
+    Exit Sub
+
+End If
+    
+'Refresh formula list in Incremental Sales and Total Sales
+Dim s_Direct_Agents As String
+
+'Refresh Incremental Sales List
+    
+    With ws_Incremental
+        .Activate
+        .AutoFilterMode = False
+    End With
+    
+    'Refresh formulas
+    
+    If Range("B2").End(xlDown).Address <> "$B$" & Last_Row Then
+    
+    Range("A2:" & Range("B" & Last_Row).End(xlUp).Offset(0, -1).Address).FillDown 'Fill Column A
+    Range("BE2:" & Range("B" & Last_Row).End(xlUp).Offset(0, 61).Address).FillDown 'Fill Column BE to BJ
+    
+    End If
+
+'Refresh Total Sales List
+    
+    With ws_Total
+        .Activate
+        .AutoFilterMode = False
+    End With
+    
+    s_Direct_Agents = ws_Multiplier.Range("A:A").Find("Direct Agents:").Address & ":" & ws_Multiplier.Range("A" & Last_Row).End(xlUp).Offset(0, 21).Address
+    
+    If Range("B2").End(xlDown).Address <> "$B$" & Last_Row Then
+        
+        Range("A2:" & Range("B" & Last_Row).End(xlUp).Offset(0, -1).Address).FillDown 'Fill Column A
+        
+        'Refresh formula for Direct Residual Only. Formula to find where the "Direct Agents:" Text is located which will serve as the starting point for the vlookup formula
+        '*******************************************************************************************************************************************************************************
+        Range("AL2").Value = "=IFERROR(IF(SUM(X2:Y2)=0,VLOOKUP($A2,'Multiplier Tables'!" & s_Direct_Agents & ",7,0),IF(SUM(X2:Y2)=1,VLOOKUP($A2,'Multiplier Tables'!" & s_Direct_Agents & ",8,0)," _
+                            & "VLOOKUP($A2,'Multiplier Tables'!" & s_Direct_Agents & ",10,0))),0)"
+        Range("AM2").Value = "=IF(AL2>=5%,AL2-IF(T2=""N"",0,IF(COUNTIFS('Multiplier Tables'!$B:$B,'Total Sales'!$D2)>=1,IF(VLOOKUP('Total Sales'!$D2,'Multiplier Tables'!$B$47:$V$100000,21,0)=""Y"",5%,0%)," _
+                                            & "IF(VLOOKUP('Total Sales'!$A2,'Multiplier Tables'!$A$47:$V$100000,22,0)=""Y"",5%,0))),AL2)"
+        Range("X2:" & Range("B" & Last_Row).End(xlUp).Offset(0, 43).Address).FillDown 'Fill Column X to AQ
+        '*******************************************************************************************************************************************************************************
+    
+    End If
+
+'Create Reseller List
+
+    'Get complete reseller names from the two raw data tabs by Calling the List Reseller Procedure
+    '*****************************
+    Call List_Reseller(ws_Incremental)
+    Call List_Reseller(ws_Total)
+    '*****************************
+
+    'Clean up the data in the pivot tables tab
+    ws_Pivots.Activate
+    
+    'Clean Reseller Name for Statement sheet (Remove Duplicates, those with "N" types and then Sort)
+    If Range("A" & Last_Row).End(xlUp).Address <> "$A$2" Then
+        
+        With Range("A2:" & Range("A" & Last_Row).End(xlUp).Address)
+            .RemoveDuplicates Columns:=1, header:=xlNo
+            .SortSpecial Order1:=xlAscending
+        End With
+        
+    End If
+    
+    'Clean Reseller Name for Residual Only sheet (Remove Duplicates, those with "N" types and then Sort)
+    If Range("E" & Last_Row).End(xlUp).Address <> "$E$2" Then
+        
+        With Range("E2:" & Range("E" & Last_Row).End(xlUp).Address)
+            .RemoveDuplicates Columns:=1, header:=xlNo
+            .SortSpecial Order1:=xlAscending
+        End With
+    
+    End If
+    
+    '**********************************************************************
+    'Insert formula to check if the reseller is a Master Reseller in the Pivots & Lookups tab
+    '**********************************************************************
+    Range("C2").Value = "=IF(COUNTIFS('Multiplier Tables'!$A:$A,'Pivots&Lookups'!$A2)>0,""Y"",""N"")" 'Insert Formula in column C
+    
+    Range("G2").Value = "=IF(COUNTIFS('Multiplier Tables'!$A:$A,'Pivots&Lookups'!$E2)>0,""Y"",""N"")" 'Insert Formula in column G
+    
+    '*********************************************************************************************************
+    'Place formula on Pivots to determine reseller type (lookups to determine reseller type from total Sales and Incremental Sales tab)
+    '*********************************************************************************************************
+    Range("B2").Value = "=IFERROR(INDEX('Total Sales'!$AS:$AS,MATCH('Pivots&Lookups'!$A2,'Total Sales'!$A:$A,0)),IFERROR(INDEX('Total Sales'!$AS:$AS,MATCH('Pivots&Lookups'!$A2,'Total Sales'!$C:$C,0))," _
+                        & "IFERROR(INDEX('Incremental Sales'!$BK:$BK,MATCH('Pivots&Lookups'!$A2,'Incremental Sales'!$A:$A,0))," _
+                        & "INDEX('Incremental Sales'!$BK:$BK,MATCH('Pivots&Lookups'!$A2,'Incremental Sales'!$C:$C,0)))))"
+   
+    Range("F2").Value = "=IFERROR(INDEX('Total Sales'!$AS:$AS,MATCH('Pivots&Lookups'!$E2,'Total Sales'!$A:$A,0)),IFERROR(INDEX('Total Sales'!$AS:$AS,MATCH('Pivots&Lookups'!$E2,'Total Sales'!$D:$D,0))," _
+                        & "IFERROR(INDEX('Incremental Sales'!$BK:$BK,MATCH('Pivots&Lookups'!$E2,'Incremental Sales'!$A:$A,0))," _
+                        & "INDEX('Incremental Sales'!$BK:$BK,MATCH('Pivots&Lookups'!$E2,'Incremental Sales'!$C:$C,0)))))"
+   
+    '**************************************************
+    'Place formula on Pivots to determine if with reduced columns
+    '**************************************************
+    Range("H2").Value = "=IFERROR(INDEX('Multiplier Tables'!$W:$W,MATCH('Pivots&Lookups'!$E2,'Multiplier Tables'!$A:$A,0)),""N"")"
+    
+    Range("A1").Activate
+    
+    '*****************************************
+    'Fill down formulas to if there's a reseller in the list
+    '*****************************************
+    
+    If Range("A" & Last_Row).End(xlUp).Address <> "$A$2" Then 'check if there are more than one reseller present in the statement list
+        
+        If Range("B" & Last_Row).End(xlUp).Address = "$B$2" Then 'Fill Down formula from B2
+            Range("B2:" & Range("A" & Last_Row).End(xlUp).Offset(0, 1).Address).FillDown
+        End If
+        
+        If Range("C" & Last_Row).End(xlUp).Address = "$C$2" Then 'Fill Down formula from C2
+            Range("C2:" & Range("A" & Last_Row).End(xlUp).Offset(0, 2).Address).FillDown
+        End If
+    
+    End If
+        
+    If Range("E" & Last_Row).End(xlUp).Address <> "$E$2" Then 'check if there are more than one reseller present in the residual only list
+                
+        If Range("F" & Last_Row).End(xlUp).Address = "$F$2" Then
+            Range("F2:" & Range("E" & Last_Row).End(xlUp).Offset(0, 1).Address).FillDown
+        End If
+    
+         If Range("G" & Last_Row).End(xlUp).Address = "$G$2" Then
+            Range("G2:" & Range("E" & Last_Row).End(xlUp).Offset(0, 2).Address).FillDown
+        End If
+        
+        If Range("H" & Last_Row).End(xlUp).Address = "$H$2" Then
+            Range("H2:" & Range("E" & Last_Row).End(xlUp).Offset(0, 3).Address).FillDown
+        End If
+    
+    End If
+    
+    'Create Data Validation in Cell B4 for Statement Sheet
+    ws_Statement.Activate
+    Range("b4").Select
+    
+    With Selection.Validation
+        .Delete
+        .Add Type:=xlValidateList, AlertStyle:=xlValidAlertStop, Operator:= _
+         xlBetween, Formula1:="='Pivots&Lookups'!" & "$A$2:" & ws_Pivots.Range("A" & Last_Row).End(xlUp).Address
+         .IgnoreBlank = True
+         .InCellDropdown = True
+         .InputTitle = ""
+         .ErrorTitle = ""
+         .InputMessage = ""
+         .ErrorMessage = ""
+         .ShowInput = True
+         .ShowError = True
+     End With
+     
+    'Create Data Validation for in Cell B4 for Residual Only Sheet
+    ws_Residual.Activate
+    With Range("B4")
+        .Value = ws_Pivots.Range("E2").Value
+        .Select
+    End With
+    
+    With Selection.Validation
+        .Delete
+        .Add Type:=xlValidateList, AlertStyle:=xlValidAlertStop, Operator:= _
+         xlBetween, Formula1:="='Pivots&Lookups'!" & "$E$2:" & ws_Pivots.Range("E" & Last_Row).End(xlUp).Address
+         .IgnoreBlank = True
+         .InCellDropdown = True
+         .InputTitle = ""
+         .ErrorTitle = ""
+         .InputMessage = ""
+         .ErrorMessage = ""
+         .ShowInput = True
+         .ShowError = True
+     End With
+     
+    'Resume calculation
+    Application.Calculation = xlCalculationAutomatic
+       
+    'Default view to the statement tab
+    ws_Statement.Activate
+    
+    With ws_Statement.Range("B4")
+        .Value = ws_Pivots.Range("A2").Value
+        .Select
+    End With
+    
+    
+Application.ScreenUpdating = True
+    
+    'Error checking for resellers that are not properly tagged in the multiplier tables
+    Dim iErrorCount As Integer 'variable to store the number of "X" or those cells with errors
+    
+    iErrorCount = Application.WorksheetFunction.CountIfs(ws_Total.Range("Z2:" & ws_Total.Range("AF" & Last_Row).End(xlUp).Address), "X")
+    
+    If iErrorCount > 0 Then 'condition to follow if error is present
+                
+        Beep
+        ws_Total.Activate
+            Range("Z1:" & Range("AF" & Last_Row).End(xlUp).Address).AutoFilter field:=1, Criteria1:="X", visibledropdown:=True
+            Range("A1").Activate
+            
+        MsgBox ("Data refresh done but with errors on the following resellers and will likely cause the file creation to fail." & vbCrLf & vbCrLf & "Please ensure that these resellers are tagged correctly in the multiplier tables and refresh data again.")
+        
+    Else
+    
+        Beep
+        MsgBox ("Data Refresh Done")
+    
+    End If
+
+    
+End Sub
+
+'Procedure to list the reseller to the Pivot table sheet
+Sub List_Reseller(Sheet_to_get_list_from As Worksheet) 'Sheet to get list from is passed to this function
+
+'Turn off calculation for faster processing
+Application.Calculation = xlCalculationManual
+
+    Dim i_Reseller_type_code As Integer
+    Dim s_Row_Letter_of_Reseller As String
+    Dim iCopyConfirm As Integer
+    
+        Sheet_to_get_list_from.Activate 'From Raw Data tab
+            
+        For i_Reseller_type_code = 1 To 5 'Loop to get the reseller data based on their reseller type
+            
+            iCopyConfirm = 0
+            Sheet_to_get_list_from.AutoFilterMode = False
+            
+            '*******************************************************************************************
+            'Determine column to be used for filtering the reseller type based on the sheet name (Incremental or Total Sales)
+            '*******************************************************************************************
+            If Sheet_to_get_list_from.Name = ws_Incremental.Name Then
+            
+                Range("BK1:" & Range("BK" & Last_Row).End(xlUp).Address).AutoFilter field:=1, Criteria1:=i_Reseller_type_code, visibledropdown:=True
+            
+            Else
+                
+                Range("AS1:" & Range("AS" & Last_Row).End(xlUp).Address).AutoFilter field:=1, Criteria1:=i_Reseller_type_code, visibledropdown:=True
+            
+            End If
+            
+            '******************************************
+            'Get the Reseller list based on reseller type number
+            '******************************************
+            If i_Reseller_type_code = 1 Then 'Copy Master with Upfront and Residual
+            
+                If Range("A" & Last_Row).End(xlUp).Address <> "$A$1" Then
+                
+                    With Range("A2:" & Range("B" & Last_Row).End(xlUp).Offset(0, -1).Address)
+                        .SpecialCells xlCellTypeVisible
+                        .copy
+                    End With
+                    
+                    iCopyConfirm = 1
+                
+                End If
+                    
+            ElseIf i_Reseller_type_code = 2 Then 'Copy Direct with Upfront and Residual
+            
+                If Sheet_to_get_list_from.Name = ws_Incremental.Name Then
+                    
+                    If Range("C" & Last_Row).End(xlUp).Address <> "$C$1" Then
+                        
+                        With Range("C2:" & Range("B" & Last_Row).End(xlUp).Offset(0, 1).Address)
+                            .SpecialCells xlCellTypeVisible
+                            .copy
+                        End With
+                        
+                        iCopyConfirm = 1
+                
+                    End If
+                
+                Else 'Procedure to get the reseller list from the Total Sales Tab
+                    
+                    If Range("C" & Last_Row).End(xlUp).Address <> "$C$1" Then
+                    
+                        With Range("C2:" & Range("B" & Last_Row).End(xlUp).Offset(0, 1).Address)
+                            .SpecialCells xlCellTypeVisible
+                            .copy
+                        End With
+                        
+                        iCopyConfirm = 1
+                    
+                    End If
+                    
+                End If
+            
+            ElseIf i_Reseller_type_code = 3 Then 'Copy Master with Residual Only
+                    
+                If Range("A" & Last_Row).End(xlUp).Address <> "$A$1" Then
+                    
+                    With Range("A2:" & Range("B" & Last_Row).End(xlUp).Offset(0, -1).Address)
+                        .SpecialCells xlCellTypeVisible
+                        .copy
+                    End With
+                    
+                    iCopyConfirm = 1
+                    
+                End If
+            
+            ElseIf i_Reseller_type_code = 4 Then 'Copy Direct with Residual Only ("Reseller Type 4")
+            
+                If Sheet_to_get_list_from.Name = ws_Incremental.Name Then 'Get Campaign names from Incremental Tab
+            
+                    If Range("AC" & Last_Row).End(xlUp).Address <> "$AC$1" Then
+                        
+                        With Range("AC2:" & Range("B" & Last_Row).End(xlUp).Offset(0, 27).Address) 'Get Campaign names from Incremental Tab
+                            .SpecialCells xlCellTypeVisible
+                            .copy
+                        End With
+                        
+                        iCopyConfirm = 1
+                    
+                    End If
+                
+                Else
+                
+                    If Range("D" & Last_Row).End(xlUp).Address <> "$D$1" Then
+                    
+                         With Range("D2:" & Range("B" & Last_Row).End(xlUp).Offset(0, 2).Address) 'Get Campaign names from Total Sales Tab
+                            .SpecialCells xlCellTypeVisible
+                            .copy
+                        End With
+                        
+                        iCopyConfirm = 1
+                    
+                    End If
+                
+                End If
+                
+            Else 'Copy Master with Campaign Residual (Reseller Type 5)
+                
+                If Sheet_to_get_list_from.Name = ws_Incremental.Name Then 'Get Masters/Campaign names from Incremental Tab
+                    
+                    If Range("A" & Last_Row).End(xlUp).Address <> "$A$1" Then
+                        
+                        With Range("A2:" & Range("B" & Last_Row).End(xlUp).Offset(0, -1).Address) 'Get the Master name from the Incremental Sales Tab
+                            .SpecialCells xlCellTypeVisible
+                            .copy
+                        End With
+                        
+                        iCopyConfirm = 1
+                    
+                    End If
+                    
+                    ws_Pivots.Activate 'Need to paste in pivot tab twice since there are two column sources for the reseller list. This is the first pasting, 2nd pasting to be done after the if-else condition
+                    
+                    If iCopyConfirm = 1 Then
+                        
+                        Range("E" & Last_Row).End(xlUp).Offset(1, 0).PasteSpecial xlPasteValues 'Paste Master reseller name from the Incremental Tab
+                    
+                    End If
+                    
+                    Sheet_to_get_list_from.Activate
+                    
+                    If Range("AC" & Last_Row).End(xlUp).Address <> "$AC$1" Then
+                        
+                        With Range("AC2:" & Range("B" & Last_Row).End(xlUp).Offset(0, 27).Address) 'Get the Campaign name from the Incremental Sales Tab
+                            .SpecialCells xlCellTypeVisible
+                            .copy
+                        End With
+                        
+                        iCopyConfirm = 1
+                        
+                    End If
+                    
+                Else 'Copy from Total Sales Tab the Campaign names of the resellers
+                    
+                    If Range("A" & Last_Row).End(xlUp).Address <> "$A$1" Then
+                        
+                        With Range("A2:" & Range("B" & Last_Row).End(xlUp).Offset(0, -1).Address) 'Get the Master Reseller name
+                            .SpecialCells xlCellTypeVisible
+                            .copy
+                        End With
+                        
+                        iCopyConfirm = 1
+                    
+                    End If
+                    
+                    ws_Pivots.Activate
+                    
+                    If iCopyConfirm = 1 Then
+                    
+                        Range("E" & Last_Row).End(xlUp).Offset(1, 0).PasteSpecial xlPasteValues 'Paste Master Reseller name to Pivots&lookup tables
+                    
+                    End If
+                    
+                    Sheet_to_get_list_from.Activate
+                    
+                    If Range("D" & Last_Row).End(xlUp).Address <> "$D$1" Then
+                    
+                        With Range("D2:" & Range("B" & Last_Row).End(xlUp).Offset(0, 2).Address) 'Get the campaign name of the reseller
+                            .SpecialCells xlCellTypeVisible
+                            .copy
+                        End With
+                        
+                        iCopyConfirm = 1
+                    
+                    End If
+                
+                End If
+
+            End If
+            '*********************************************************************************
+            
+            ws_Pivots.Activate 'Paste Reseller name to pivot sheet
+            
+            If iCopyConfirm = 1 Then
+            
+                If i_Reseller_type_code = 1 Or i_Reseller_type_code = 2 Then
+                    
+                    Range("A" & Last_Row).End(xlUp).Offset(1, 0).PasteSpecial xlPasteValues
+                                    
+                Else
+                    
+                    Range("E" & Last_Row).End(xlUp).Offset(1, 0).PasteSpecial xlPasteValues
+                
+                End If
+                
+                Range("A2").Activate
+                
+            End If
+            
+            Sheet_to_get_list_from.Activate
+            
+            
+        Next i_Reseller_type_code
+        
+        Sheet_to_get_list_from.AutoFilterMode = False
+      
+End Sub
+
+
