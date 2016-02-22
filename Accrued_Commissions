@@ -1,0 +1,82 @@
+Option Explicit
+Option Base 1
+Public sTemplate As String
+
+Sub AccruedMacro()
+
+Assign_Sheets.Assign_Sheets 'Call the sheet assignments procedure
+
+sTemplate = ActiveWorkbook.Name
+
+Application.ScreenUpdating = False
+
+Dim iRowLooper As Integer
+Dim sCurrentReseller As String
+Dim iCountOfResidualReseller As Integer
+Dim iCountofCommissionsAccruedData As Integer
+Dim iAccruedDataRowLooper As Integer
+
+
+
+iCountOfResidualReseller = ws_Pivots.Range("E2:" & ws_Pivots.Range("E" & Last_Row).End(xlUp).Address).Count 'Count the number of Residual Only Reseller
+iCountofCommissionsAccruedData = ws_Commissions_Accrued.Range("B2:" & ws_Commissions_Accrued.Range("B" & Last_Row).End(xlUp).Address).Count 'Count the total number of rows in the accrued commissions
+
+For iRowLooper = 2 To (iCountOfResidualReseller + 1) 'Loop thru the list of residual only reseller
+        
+    If ws_Pivots.Range("F" & iRowLooper).Value = 5 Then 'Check if the the reseller is type 5
+        
+        ws_Residual.Range("B4").Value = ws_Pivots.Range("E" & iRowLooper).Value 'if reseller is type 5, change the value of cell b4 in residual only reseller tab
+            
+        If ws_Residual.Range("B11").Value > 0 Then 'Check if the reseller is going to be paid based on their minimum MRR payout
+            
+            ws_Commissions_Accrued.Activate 'if reseller is going to be paid, all accrued commissions should be marked as paid
+                
+                For iAccruedDataRowLooper = 1 To iCountofCommissionsAccruedData 'find the reseller name thru looping in the accrued commissions data
+                    
+                    If Range("B" & iAccruedDataRowLooper).Value = ws_Residual.Range("B4").Value Then 'check if the reseller in the accrued commissions tab is equal to the reseller in the residual only tab
+                        
+                        If Range("E" & iAccruedDataRowLooper).Value = "" Then 'put paid in column E if the cell is blank
+                        
+                            Range("E" & iAccruedDataRowLooper).Value = "Paid"
+                        
+                        End If
+                        
+                        If Range("F" & iAccruedDataRowLooper).Value = "" Then 'put the commissions period as the paid date.
+                            
+                            Range("F" & iAccruedDataRowLooper).Value = ws_Residual.Range("B5").Value
+                        
+                        End If
+                    
+                    End If
+                
+                Next iAccruedDataRowLooper
+                
+            ws_Residual.Activate
+        
+        ElseIf ws_Residual.Range("B11").Value = 0 And ws_Residual.Range("B9").Value > 0 Then 'procedure to follow if the reseller is not going to be paid
+            
+            sCurrentReseller = ws_Residual.Range("B4").Value 'assign the name of the current reseller to the sCurrentReseller variable
+            
+            ws_Commissions_Accrued.Activate
+            
+            With ws_Commissions_Accrued.Range("B" & Last_Row).End(xlUp) 'Fill up the data from the residual only ta
+                .Offset(1, 0).Value = sCurrentReseller
+                .Offset(1, -1).Value = ws_Residual.Range("B16").Value
+                .Offset(1, 1).Value = ws_Residual.Range("B5").Value
+                .Offset(1, 2).Value = ws_Residual.Range("B9").Value
+            End With
+            
+            ws_Residual.Activate
+        
+        End If
+    
+    End If
+
+Next iRowLooper
+                     
+Beep
+MsgBox ("Commissions Accrual Done!")
+                     
+Application.ScreenUpdating = True
+                     
+End Sub
