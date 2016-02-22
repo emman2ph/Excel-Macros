@@ -1,0 +1,202 @@
+Option Explicit
+Option Base 1
+Public sTemplate As String
+Public sNewFileName As String
+
+
+Sub NetsuiteMacro()
+
+NetsuiteSelect.Show
+
+End Sub
+
+Sub Netsuite(ResellerType As String)
+
+Call Assign_Sheets.Assign_Sheets
+
+Dim sCurrentResellerName As String
+Dim iRowLooperForPivotsTab As Integer
+Dim sResellerMasterIndicator As String
+Dim dTotalPayout As Double
+Dim iStatementTotalResellerCount As Integer
+Dim iResidualTotalResellerCount As Integer
+Dim sCommissionsDate As String
+Dim sCurrency As String
+Dim NewWorkbook As Workbook
+Dim InitialSaveName As String
+
+Application.ScreenUpdating = False
+
+sTemplate = ActiveWorkbook.Name
+'Loop to list Netsuite data for Statement resellers
+iStatementTotalResellerCount = ws_Pivots.Range("A2:" & ws_Pivots.Range("A" & Last_Row).End(xlUp).Address).Count 'Count the number of resellers in the list
+
+ws_Statement.Activate
+
+For iRowLooperForPivotsTab = 2 To (iStatementTotalResellerCount + 1)
+    
+    sCurrentResellerName = ws_Pivots.Range("A" & iRowLooperForPivotsTab).Value 'Get the name of reseller
+    sResellerMasterIndicator = ws_Pivots.Range("C" & iRowLooperForPivotsTab).Value 'Get Master Reseller Indicator value
+    sCommissionsDate = ws_Statement.Range("B5").Value
+        
+    ws_Statement.Range("B4").Value = sCurrentResellerName
+    dTotalPayout = ws_Statement.Range("B11").Value
+    sCurrency = ws_Statement.Range("B6").Value
+    
+    If dTotalPayout > 0 Then 'condition to check if the payout is positive
+        
+        'condition to check if the button clicked by the user is Master or direct
+        If ResellerType = "Masters" Then 'procedure to follow if the button clicked is the Master reseller
+            
+            If sResellerMasterIndicator = "Y" Then 'condition to check if the current reseller is a Master or direct
+        
+                Call NetsuitePopulate(sCurrentResellerName, sCommissionsDate, dTotalPayout, sCurrency, ResellerType)
+            
+            End If
+        
+        Else 'procedure to follow if the button clicked is the Master reseller
+            
+            If sResellerMasterIndicator = "N" Then 'condition to check if the current reseller is a Master or direct
+                
+                Call NetsuitePopulate(sCurrentResellerName, sCommissionsDate, dTotalPayout, sCurrency, ResellerType)
+            
+            End If
+        
+        End If 'end Master/Direct check
+    
+    End If 'End procedure for total payout if Total Payout is 0
+
+Next iRowLooperForPivotsTab
+
+'*******************************
+'RUN FOR RESIDUAL ONLY RESELLERS
+'*******************************
+
+'Loop to list Netsuite data for Statement resellers
+iResidualTotalResellerCount = ws_Pivots.Range("E2:" & ws_Pivots.Range("E" & Last_Row).End(xlUp).Address).Count 'Count the number of resellers in the list
+
+ws_Residual.Activate
+
+For iRowLooperForPivotsTab = 2 To (iResidualTotalResellerCount + 1)
+    
+    sCurrentResellerName = ws_Pivots.Range("E" & iRowLooperForPivotsTab).Value 'Get the name of reseller
+    sResellerMasterIndicator = ws_Pivots.Range("G" & iRowLooperForPivotsTab).Value 'Get Master Reseller Indicator value
+    sCommissionsDate = ws_Statement.Range("B5").Value
+        
+    ws_Residual.Range("B4").Value = sCurrentResellerName
+    dTotalPayout = ws_Residual.Range("B11").Value
+    sCurrency = ws_Residual.Range("B6").Value
+    
+    If dTotalPayout > 0 Then 'condition to check if the payout is positive
+        
+        'condition to check if the button clicked by the user is Master or direct
+        If ResellerType = "Masters" Then 'procedure to follow if the button clicked is the Master reseller
+            
+            If sResellerMasterIndicator = "Y" Then 'condition to check if the current reseller is a Master or direct
+        
+                Call NetsuitePopulate(sCurrentResellerName, sCommissionsDate, dTotalPayout, sCurrency, ResellerType)
+            
+            End If
+        
+        Else 'procedure to follow if the button clicked is the Master reseller
+            
+            If sResellerMasterIndicator = "N" Then 'condition to check if the current reseller is a Master or direct
+                
+                Call NetsuitePopulate(sCurrentResellerName, sCommissionsDate, dTotalPayout, sCurrency, ResellerType)
+            
+            End If
+        
+        End If 'end Master/Direct check
+    
+    End If 'End procedure for total payout if Total Payout is 0
+
+Next iRowLooperForPivotsTab
+
+Set NewWorkbook = Workbooks.Add
+
+Application.DisplayAlerts = False
+Sheets("sheet2").Delete
+Sheets("Sheet3").Delete
+Application.DisplayAlerts = True
+
+sNewFileName = ActiveWorkbook.Name
+
+Windows(sTemplate).Activate
+
+Application.ScreenUpdating = True
+
+If ResellerType = "Masters" Then
+    
+    ws_Netsuite_Masters.copy Before:=NewWorkbook.Sheets("Sheet1")
+    Application.DisplayAlerts = False
+    Sheets("sheet1").Delete
+    Application.DisplayAlerts = True
+    InitialSaveName = Application.GetSaveAsFilename(InitialFileName:="Netsuite - Masters")
+
+Else
+
+    ws_Netsuite_Direct.copy Before:=NewWorkbook.Sheets("Sheet1")
+    Application.DisplayAlerts = False
+    Sheets("sheet1").Delete
+    Application.DisplayAlerts = True
+    InitialSaveName = Application.GetSaveAsFilename(InitialFileName:="Netsuite - Direct")
+
+End If
+
+Windows(sNewFileName).Activate
+
+On Error Resume Next
+    
+    ActiveWorkbook.SaveAs filename:=InitialSaveName & "xlsx"
+
+If Err.Number <> 0 Then
+    
+    Exit Sub
+
+End If
+
+On Error GoTo 0
+      
+End Sub
+
+Sub NetsuitePopulate(sResellerName As String, sCommissionsDate As String, dAmount As Double, sCurrency As String, sResellerType As String)
+
+Call Assign_Sheets.Assign_Sheets
+
+If sResellerType = "Masters" Then
+    
+    ws_Netsuite_Masters.Activate
+
+    Range("C" & Last_Row).End(xlUp).Offset(1, 0).Value = "VAR Commissions"
+    With Range("C" & Last_Row).End(xlUp).Offset(0, 1)
+        .NumberFormat = "@"
+        .Value = sCommissionsDate
+    End With
+    Range("C" & Last_Row).End(xlUp).Offset(0, 2).Value = sResellerName
+    Range("C" & Last_Row).End(xlUp).Offset(0, 4).Value = "Sales: VAR"
+    Range("C" & Last_Row).End(xlUp).Offset(0, 5).Value = "RingCentral San Mateo"
+    Range("C" & Last_Row).End(xlUp).Offset(0, 6).Value = dAmount
+    Range("C" & Last_Row).End(xlUp).Offset(0, 7).Value = sCurrency
+
+    Range("A1").Activate
+    
+Else: sResellerType = "Direct"
+
+    ws_Netsuite_Direct.Activate
+
+    Range("C" & Last_Row).End(xlUp).Offset(1, 0).Value = "VAR Commissions"
+    With Range("C" & Last_Row).End(xlUp).Offset(0, 1)
+        .NumberFormat = "@"
+        .Value = sCommissionsDate
+    End With
+    Range("C" & Last_Row).End(xlUp).Offset(0, 2).Value = sResellerName
+    Range("C" & Last_Row).End(xlUp).Offset(0, 4).Value = "Sales: VAR"
+    Range("C" & Last_Row).End(xlUp).Offset(0, 5).Value = "RingCentral San Mateo"
+    Range("C" & Last_Row).End(xlUp).Offset(0, 6).Value = dAmount
+    Range("C" & Last_Row).End(xlUp).Offset(0, 7).Value = sCurrency
+    
+    Range("A1").Activate
+
+End If
+
+End Sub
