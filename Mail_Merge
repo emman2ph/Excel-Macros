@@ -1,0 +1,117 @@
+Option Explicit
+Option Base 1
+Public sTemplate As String
+Public sNewFileName As String
+
+Sub MailMergeMacro()
+
+Call Assign_Sheets.Assign_Sheets
+
+Dim wbMailMerge As Workbook
+Dim MailMergeSaveName As String
+
+sTemplate = ActiveWorkbook.Name
+Set wbMailMerge = Workbooks.Add
+
+ws_File_Location_Direct.Activate 'Fill the formula in the Direct Location tab
+
+Beep
+MsgBox ("Running Mail Merge File for Direct Resellers!")
+
+Range("A2").Value = "=IFERROR(VLOOKUP($C2,'Reseller SF Data'!$A:$E,5,0),"""")" 'fill the columns with formulas
+Range("A2:" & Range("B" & Last_Row).End(xlUp).Offset(0, -1).Address).FillDown
+
+Range("F2").Value = "=IFERROR(VLOOKUP($C2,'Reseller SF Data'!$A:$E,3,0),"""")" 'fill the columns with formulas
+Range("F2:" & Range("B" & Last_Row).End(xlUp).Offset(0, 4).Address).FillDown
+
+Range("G2").Value = "=IFERROR(VLOOKUP($C2,'Reseller SF Data'!$A:$E,4,0),"""")" 'fill the columns with formulas
+Range("G2:" & Range("B" & Last_Row).End(xlUp).Offset(0, 5).Address).FillDown
+
+Range("H2:" & Range("B" & Last_Row).End(xlUp).Offset(0, 6).Address).NumberFormat = "@" 'fill the columns with formulas
+Range("H2").Value = ws_Statement.Range("B5").Value
+Range("H2:" & Range("B" & Last_Row).End(xlUp).Offset(0, 6).Address).FillDown
+
+MailMergeSaveName = Application.GetSaveAsFilename(InitialFileName:="Direct Resellers " & ws_Statement.Range("B5").Value & " Mail Merge File") 'fill the columns with formulas
+
+If MailMergeSaveName <> "False" Then
+
+'Copy first the contents of file location - direct to new workbook then copy each commissions type to each tab (tinatamad na ko ayusin tong step na to!)
+ws_File_Location_Direct.copy Before:=wbMailMerge.Sheets("Sheet1") 'copy the contents of File location - Direct to new worksheet
+Range("A2:" & Range("B" & Last_Row).End(xlUp).Offset(0, 6).Address).copy
+Range("A2").PasteSpecial xlPasteValues
+Range("A1").Activate
+
+Sheets("Sheet1").Name = "Positive" '
+Sheets("Sheet2").Name = "Negative"
+Sheets("Sheet3").Name = "Zero due to Chargeback"
+Sheets.Add after:=Sheets("Zero due to Chargeback")
+Sheets("Sheet5").Name = "Zero"
+
+'Paste data by commission type
+
+Dim iCommissionsTypeLoop As Integer
+Dim iCommissionsType As String
+
+    For iCommissionsTypeLoop = 1 To 4 'Loop to fill the correct tab with the correct list for that commission type
+        
+        If iCommissionsTypeLoop = 1 Then
+            
+            iCommissionsType = "Positive"
+        
+        ElseIf iCommissionsTypeLoop = 2 Then
+            
+            iCommissionsType = "Negative"
+        
+        ElseIf iCommissionsTypeLoop = 3 Then
+            
+            iCommissionsType = "Zero due to Chargeback"
+        
+        ElseIf iCommissionsTypeLoop = 4 Then
+            
+            iCommissionsType = "Zero"
+        
+        End If
+            
+        'Filter the sheet with the corresponding commissions type
+        Sheets("File location - Direct").Activate
+        Range("E1:" & Range("E" & Last_Row).Address).AutoFilter field:=1, Criteria1:=iCommissionsType, visibledropdown:=True
+        
+        'Copy the filtered list to the correct tab
+        With Range("A1:" & Range("H" & Last_Row).End(xlUp).Address)
+            .SpecialCells xlCellTypeVisible
+            .copy
+        End With
+                
+                
+        Sheets(iCommissionsType).Activate
+        Range("A1").PasteSpecial xlPasteValuesAndNumberFormats
+        
+        With Range("A1:" & Range("A" & Last_Row).End(xlUp).Offset(0, 7).Address)
+            .Columns.AutoFit
+            .HorizontalAlignment = xlLeft
+        End With
+        
+        Range("A" & Last_Row).End(xlUp).Offset(1, 0).Select
+        Range("A1").Select
+        
+        Sheets("File location - Direct").Activate
+        Sheets("File location - Direct").AutoFilterMode = False
+        
+    Next iCommissionsTypeLoop
+    
+    Application.DisplayAlerts = False
+        Sheets("File location - Direct").Delete
+    Application.DisplayAlerts = True
+    
+
+ActiveWorkbook.SaveAs filename:=MailMergeSaveName & "xlsx"
+
+Else
+    
+    Exit Sub
+
+End If
+
+End Sub
+
+
