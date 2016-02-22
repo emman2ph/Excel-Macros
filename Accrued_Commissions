@@ -1,3 +1,4 @@
+'test
 Option Explicit
 Option Base 1
 Public sTemplate As String
