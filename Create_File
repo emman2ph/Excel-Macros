@@ -1,0 +1,1648 @@
+Option Explicit
+Option Base 1
+
+Public st_template As String
+Public s_new_file As String
+
+'File creation steps
+
+Sub Create_File_Main()
+
+Application.ScreenUpdating = False
+
+Call Assign_Sheets.Assign_Sheets
+
+'*
+If ws_Total.Range("A1").End(xlDown).Address = "$A$" Or ws_Total.Range("A2").End(xlDown).Address = "$A$" & Last_Row Then 'Check for empty raw data
+
+    MsgBox ("TOTAL SALES tab is empty. Load data before file generation."), vbCritical 'Exit sub if there is now raw data
+    Exit Sub
+
+Else
+
+    '**
+    If ws_Statement.Range("B5").Value = "" Or ws_Residual.Range("B5").Value = "" Then 'Check if commissions period in both Statement and Residual Only tabs are properly filled up. Exit procedure if not.
+    
+        MsgBox ("Commission Period in STATEMENT and/or RESIDUAL ONLY tabs are blank. Please provide correct commissions period!"), vbCritical
+        Exit Sub
+    
+    Else 'Run file generation template
+        
+        Dim save_fldr As FileDialog
+        Dim SaveFolderName As String
+        Dim FolderDeletionResponse As Integer
+        
+        
+        'Open file dialog box
+        Set save_fldr = Application.FileDialog(msoFileDialogFolderPicker)
+            save_fldr.AllowMultiSelect = False
+           
+            '***
+            If save_fldr.Show = 0 Then
+                
+                Exit Sub 'Exit sub if user does not choose a save folder
+            
+            Else
+            
+                'Check if the save folders are already existing and then ask the user to delete sub folders first
+                '****
+                If Len(Dir(save_fldr.SelectedItems(1) & "\Masters", vbDirectory)) <> 0 Or Len(Dir(save_fldr.SelectedItems(1) & "\Direct", vbDirectory)) <> 0 Or Len(Dir(save_fldr.SelectedItems(1) & "\Masters with Direct", vbDirectory)) Then
+                
+                    'Ask the user to delete the subfolders first
+                    Beep
+                    FolderDeletionResponse = MsgBox("Folder name conflict detected! All folders and sub folders will be deleted from the folder below: " & vbCrLf & vbCrLf & save_fldr.SelectedItems(1), vbYesNo)
+                    
+                    If FolderDeletionResponse = vbYes Then
+                        'Folder deletion procedure
+                        Dim FSO As Object
+    
+                        Set FSO = CreateObject("scripting.filesystemobject")
+    
+                        If Right(save_fldr.SelectedItems(1), 1) = "\" Then
+                            SaveFolderName = Left(save_fldr.SelectedItems(1), Len(SaveFolderName) - 1)
+                        End If
+    
+                        If FSO.FolderExists(save_fldr.SelectedItems(1)) = False Then
+                            MsgBox SaveFolderName & " doesn't exist"
+                            Exit Sub
+                        End If
+    
+                        On Error Resume Next
+                        'Delete files
+                        FSO.deletefile save_fldr.SelectedItems(1) & "\*.*", True
+                        'Delete subfolders
+                        FSO.deletefolder save_fldr.SelectedItems(1) & "\*.*", True
+                        On Error GoTo 0
+                    
+                    Else
+                    
+                        Exit Sub
+                    
+                    End If
+                    
+                End If
+                    
+                    'Create the sub folders under the chosen save folder
+                    MkDir (save_fldr.SelectedItems(1) & "\Masters")
+                    MkDir (save_fldr.SelectedItems(1) & "\Direct")
+                    MkDir (save_fldr.SelectedItems(1) & "\Direct\Positive")
+                    MkDir (save_fldr.SelectedItems(1) & "\Direct\Negative")
+                    MkDir (save_fldr.SelectedItems(1) & "\Direct\Zero due to Chargeback")
+                    MkDir (save_fldr.SelectedItems(1) & "\Direct\Zero")
+                
+                'Start the file creation
+                    
+                Dim wb_current_workbook As Workbook
+                Dim s_current_reseller As String
+                Dim i_reseller_row_looper As Integer
+                Dim i_Total_loop_to_be_performed As Integer
+                Dim s_month As String
+                Dim d_minimum_mrr As Double
+                Dim d_sum_of_mrr As Double
+                Dim sNewFileName As String
+                Dim iTotalNumberofResellersinTemplate As Integer
+                Dim iTotalNumberofResellersinStatement As Integer
+                Dim iNumberOfPositiveStatements As Integer
+                Dim iNumberOfNegativeStatements As Integer
+                Dim iNumberOfZeroByChargebackStatements As Integer
+                Dim iNumberOfZeroStatements As Integer
+                Dim iNumberOfMastersStatements As Integer
+                Dim iPartnerID As Long
+                Dim s_fileSaveLocation As String 'Variable to store the location of the generated file
+                Dim sGeneratedFileSaveName As String 'Variable to store the full filename including the file extension of the generated file
+                Dim sCommissionType As String
+                                                                                    
+                st_template = ActiveWorkbook.Name 'Save the name of the template
+                
+                iNumberOfPositiveStatements = 0
+                iNumberOfNegativeStatements = 0
+                iNumberOfZeroByChargebackStatements = 0
+                iNumberOfZeroStatements = 0
+                iNumberOfMastersStatements = 0
+                
+                iTotalNumberofResellersinTemplate = ws_Pivots.Range("A2:" & ws_Pivots.Range("A" & Last_Row).End(xlUp).Address).Count + ws_Pivots.Range("E2:" & ws_Pivots.Range("E" & Last_Row).End(xlUp).Address).Count
+                iTotalNumberofResellersinStatement = ws_Pivots.Range("A2:" & ws_Pivots.Range("A" & Last_Row).End(xlUp).Address).Count
+                i_Total_loop_to_be_performed = ws_Pivots.Range("A2:" & ws_Pivots.Range("A" & Last_Row).End(xlUp).Address).Count + 1
+                s_month = ws_Statement.Range("B5").Value 'Get the month based on Cell B5 of the statement tab
+                'Master reseller code first
+                
+                ws_Statement.Activate
+                
+                For i_reseller_row_looper = 2 To i_Total_loop_to_be_performed '+1 since the first row in pivots tab is the column headers
+        
+                    s_current_reseller = ws_Pivots.Range("A" & i_reseller_row_looper).Value 'assignment of the reseller name to the variable
+                    ws_Statement.Range("B4").Value = s_current_reseller 'assign current reseller as Statement Reseller
+                    
+                    d_minimum_mrr = ws_Statement.Range("B15").Value 'get the minimum MRR requirement for that reseller
+                    d_sum_of_mrr = ws_Statement.Range("B16").Value 'get the sum of the MRR of the reseller
+                    iPartnerID = ws_Statement.Range("B17").Value 'Get the partner ID of the reseller
+                    
+                                                                                                                                '**********************************
+                    If ws_Pivots.Range("C" & i_reseller_row_looper).Value = "Y" Then 'FOR MASTER RESELLER FILE GENERATION
+                                                                                                                                '**********************************
+                                                                                                                                
+                        If ws_Statement.Range("B8").Value >= ws_Statement.Range("B14") Then
+                         
+                            Call Create_reseller_file_master(s_current_reseller, "A") 'Get raw data and create file
+                            
+                            Windows(st_template).Activate
+                            ws_Statement.copy Before:=Workbooks(s_new_file).Sheets("Detail") 'Copy statement sheet to new file
+                            
+                            Windows(s_new_file).Activate
+                            
+                            Sheets("Statement").Name = "Summary"
+                            
+                            'Remove formulas from the statement tab
+                            With Range("A1:B11")
+                                .copy
+                                .PasteSpecial xlPasteValues
+                            End With
+                            
+                            Range("B8").Value = "='Detail'!" & Sheets("Detail").Range("BE" & Last_Row).End(xlUp).Address 'place the incremental commissions of the reseller
+                            
+                            If d_sum_of_mrr >= d_minimum_mrr Then 'condition for the reseller to be paid only when meeting the minimum MRR requirement
+                            
+                                Range("B9").Value = "=Total!" & Sheets("Total").Range("AA" & Last_Row).End(xlUp).Address
+                            
+                            Else
+                                
+                                Range("B9").Value = 0
+                            
+                            End If
+                            
+                            Range("B11").Value = "=sum(B8:B10)"
+                            
+                            'Remove the macro buttons and validation from the statement sheet
+                            Range("A14:" & Range("B" & Last_Row).End(xlUp).Address).ClearContents
+                            ActiveSheet.Buttons.Delete
+                            ActiveSheet.Shapes("Group Box 57").Delete
+                            ActiveSheet.Shapes("Group Box 5").Delete
+                            ActiveSheet.Shapes("Group Box 8").Delete
+                            Range("B4").Validation.Delete
+                            Range("E1").Activate
+                            Range("A1").Activate
+                            
+                            On Error Resume Next
+                                ActiveWorkbook.SaveAs filename:=save_fldr.SelectedItems(1) & "\Masters\" & s_current_reseller & "_" & s_month & ".xlsx"
+                                
+                                If Err.Number <> 0 Then
+                                    
+                                    Beep
+                                    sNewFileName = Application.InputBox("Reseller Name:" & s_current_reseller & " contains illegal characters. Use a different filename.")
+                                    ActiveWorkbook.SaveAs filename:=save_fldr.SelectedItems(1) & "\Masters\" & sNewFileName & "_" & s_month & ".xlsx"
+                                
+                                End If
+                            
+                            On Error GoTo 0
+                            
+                            sGeneratedFileSaveName = ActiveWorkbook.FullName 'Store the location of the generated file in the sGeneratedFileSaveName Variable
+                            iNumberOfMastersStatements = iNumberOfMastersStatements + 1 'Store the number of Master Statement generated
+                            ActiveWorkbook.Close 'Close the generated file
+                            
+                            Call StoreToFileLocationTabs(iPartnerID, "Master Reseller", sGeneratedFileSaveName, s_current_reseller, "Masters")
+                            
+                        End If
+                            
+                            '**********************************
+                    Else 'FOR DIRECT RESELLER FILE GENERATION
+                            '**********************************
+                        
+                        If ws_Statement.Range("B8") <> 0 Or ws_Statement.Range("B9") <> 0 Or ws_Statement.Range("B10") <> 0 Or ws_Statement.Range("B11") <> 0 Or (ws_Statement.Range("B11") = 0 And ws_Statement.Range("B18") > 0) Then
+                                               
+                            Call Create_reseller_file_master(s_current_reseller, "C") 'indicate which column to look at from the incremental list
+                            
+                            Windows(st_template).Activate
+                            ws_Statement.copy Before:=Workbooks(s_new_file).Sheets("Detail") 'Copy statement sheet to new file
+                            
+                            Windows(s_new_file).Activate
+                            
+                            Sheets("Statement").Name = "Summary"
+                            
+                            'Remove formulas from the statement tab
+                            With Range("A1:B11")
+                                .copy
+                                .PasteSpecial xlPasteValues
+                            End With
+                            
+                            Range("B8").Value = "='Detail'!" & Sheets("Detail").Range("BE" & Last_Row).End(xlUp).Address
+                            
+                            If d_sum_of_mrr >= d_minimum_mrr Then 'condition for the reseller to be paid only when meeting the minimum MRR requirement
+                            
+                                Range("B9").Value = "=Total!" & Sheets("Total").Range("AA" & Last_Row).End(xlUp).Address
+                            
+                            Else
+                                
+                                Range("B9").Value = 0
+                            
+                            End If
+                            
+                            Range("B11").Value = "=sum(B8:B10)"
+                            
+                            'Remove the macro buttons and validation from the statement sheet
+                            Range("A14:" & Range("B" & Last_Row).End(xlUp).Address).ClearContents
+                            ActiveSheet.Buttons.Delete
+                            ActiveSheet.Shapes("Group Box 57").Delete
+                            ActiveSheet.Shapes("Group Box 5").Delete
+                            ActiveSheet.Shapes("Group Box 8").Delete
+                            Range("B4").Validation.Delete
+                            
+                            Sheets.Add after:=Sheets("Total") 'Add the Total sheet
+                            
+                            'Add chargeback data
+                            Sheets("Sheet5").Name = "Chargeback"
+                            Range("A1").Value = "Negative Month"
+                            Range("B1").Value = "Amount"
+                            
+                            Chargeback (s_current_reseller) 'call the chargeback procedure
+                            
+                            'Put chargeback row names and formulas
+                            Range("A" & Last_Row).End(xlUp).Offset(2, 0).Value = "Total Chargebacks"
+                            Range("A" & Last_Row).End(xlUp).Offset(0, 1).Value = "=sum(" & Range("B2:" & Range("B" & Last_Row).End(xlUp).Address).Address & ")"
+                            Range("A" & Last_Row).End(xlUp).Offset(1, 0).Value = "Less: Chargeback taken out this month"
+                            Range("A" & Last_Row).End(xlUp).Offset(0, 1).Value = Sheets("Summary").Range("B10").Value
+                            Range("A" & Last_Row).End(xlUp).Offset(1, 0).Value = "Chargebacks Remaining"
+                            Range("A" & Last_Row).End(xlUp).Offset(0, 1).Value = "=" & Range("B" & Last_Row).End(xlUp).Offset(-1, 0).Address & "-" & Range("B" & Last_Row).End(xlUp).Address
+                            
+                            'Formatting of chargeback field column A:A
+                            With Range("A1:" & Range("A" & Last_Row).End(xlUp).Offset(0, 1).Address)
+                                .Select
+                                .Font.Size = 10
+                                .Font.Name = "calibri"
+                                .Borders.LineStyle = xlContinuous
+                                .Borders.Weight = xlThin
+                                .Borders.ColorIndex = xlAutomatic
+                                .HorizontalAlignment = xlLeft
+                                .Columns.AutoFit
+                            End With
+                            
+                            Range("A2:" & Range("A2").End(xlDown).Address).NumberFormat = "mmm-yy" 'Format the date in the chargeback tab
+                            
+                            With Range("B2:" & Range("B" & Last_Row).End(xlUp).Address) 'Format the numbers in column B of the chargeback tab
+                                .NumberFormat = "#,##0.00_);[Red](#,##0.00)"
+                                .Font.Size = 10
+                                .Font.Name = "calibri"
+                                .HorizontalAlignment = xlRight
+                            End With
+                            
+                            'Default cell selection to Cell A1
+                            Range("C1").Activate
+                            Range("A1").Activate
+                            
+                            Sheets("Summary").Activate
+                            Range("E1").Activate
+                            Range("A1").Activate
+                            
+                           On Error Resume Next
+                          
+                                If Range("B11").Value > 0 Then 'Save file in positive folder under Direct
+                                    
+                                    s_fileSaveLocation = save_fldr.SelectedItems(1) & "\Direct\Positive\"
+                                    sCommissionType = "Positive"
+                                    ActiveWorkbook.SaveAs filename:=save_fldr.SelectedItems(1) & "\Direct\Positive\" & s_current_reseller & "_" & s_month & ".xlsx"
+                                    iNumberOfPositiveStatements = iNumberOfPositiveStatements + 1
+                                    
+                                ElseIf Range("B11").Value = 0 And Range("B10").Value < 0 Then 'Save file in Zero due to chargeback under Direct
+                                
+                                    s_fileSaveLocation = save_fldr.SelectedItems(1) & "\Direct\Zero due to Chargeback\"
+                                    sCommissionType = "Zero due to Chargeback"
+                                    ActiveWorkbook.SaveAs filename:=save_fldr.SelectedItems(1) & "\Direct\Zero due to Chargeback\" & s_current_reseller & "_" & s_month & ".xlsx"
+                                    iNumberOfZeroByChargebackStatements = iNumberOfZeroByChargebackStatements + 1
+                                    
+                                ElseIf Range("B11").Value = 0 And Range("B10") = 0 Then 'Do nothing if the file generated has zero in all Column B fields
+                                    
+                                    If Sheets("Summary").Range("A1").End(xlDown).Address <> "$A$" & Last_Row Then
+                                        
+                                        s_fileSaveLocation = save_fldr.SelectedItems(1) & "\Direct\Zero\"
+                                        sCommissionType = "Zero"
+                                        ActiveWorkbook.SaveAs filename:=save_fldr.SelectedItems(1) & "\Direct\Zero\" & s_current_reseller & "_" & s_month & ".xlsx"
+                                        iNumberOfZeroStatements = iNumberOfZeroStatements + 1
+                                    End If
+                                        
+                                                                
+                                ElseIf Range("B11").Value < 0 Then 'Save file in Negative folder under Direct
+                                
+                                    s_fileSaveLocation = save_fldr.SelectedItems(1) & "\Direct\Negative\"
+                                    sCommissionType = "Negative"
+                                    ActiveWorkbook.SaveAs filename:=save_fldr.SelectedItems(1) & "\Direct\Negative\" & s_current_reseller & "_" & s_month & ".xlsx"
+                                    iNumberOfNegativeStatements = iNumberOfNegativeStatements + 1
+                                    
+                                End If
+                                
+                                If Err.Number <> 0 Then 'Ask the user for a new file name if the reseller name contains invalid characters and cannot be saved
+                                    
+                                    Beep
+                                    sNewFileName = Application.InputBox("Reseller Name:" & s_current_reseller & " contains illegal characters. Use a different filename.")
+                                    ActiveWorkbook.SaveAs filename:=s_fileSaveLocation & sNewFileName & "_" & s_month & ".xlsx"
+    
+                                End If
+                                
+                                'Close workbooks after saving
+                                sGeneratedFileSaveName = ActiveWorkbook.FullName 'Store the location of the generated file in the sGeneratedFileSaveName Variable
+                                Application.DisplayAlerts = False
+                                ActiveWorkbook.Close
+                                Application.DisplayAlerts = True
+                                
+                                Call StoreToFileLocationTabs(iPartnerID, sCommissionType, sGeneratedFileSaveName, s_current_reseller, "Direct") 'Total
+
+                            On Error GoTo 0
+                                
+                        End If
+                         
+                    End If
+                    
+                    Application.StatusBar = "Checking " & (i_reseller_row_looper - 1) & " out of " & iTotalNumberofResellersinTemplate & " resellers. " & Format(i_reseller_row_looper / iTotalNumberofResellersinTemplate, "Percent")
+                
+                Next i_reseller_row_looper
+                
+                ws_Statement.Range("B4").Value = ws_Pivots.Range("A2").Value 'assign the name of the first value of the reseller in statement column of the pivots tab
+                
+                
+                '********************************
+                'CODE FOR RESIDUAL ONLY RESELLERS
+                '********************************
+                Dim sResidualCurrentReseller As String
+                Dim iResidualResellerRowLooper As Integer
+                Dim iResidualTotalLoopToBePerformed As Integer
+                Dim sResidualCommissionsMonth As String
+                Dim lResidualMinimumMrr As Double
+                Dim lResidualSumOfMrr As Double
+                Dim iResidualResellerType As Integer
+                Dim sResidualResellerMasterIndicator As String
+                Dim sResellerWithReducedFields As String
+                Dim lResidualMinimumPayout As Double
+                
+                iResidualTotalLoopToBePerformed = ws_Pivots.Range("E2:" & ws_Pivots.Range("E" & Last_Row).End(xlUp).Address).Count
+                sResidualCommissionsMonth = ws_Residual.Range("B5").Value
+                
+                'Master reseller code first
+                 ws_Residual.Activate
+                
+                For iResidualResellerRowLooper = 2 To (iResidualTotalLoopToBePerformed + 1) 'since the first row in pivots tab is the column headers
+                
+                    lResidualMinimumMrr = ws_Residual.Range("B14").Value 'get the minimum MRR requirement for that reseller
+                    lResidualSumOfMrr = ws_Residual.Range("B15").Value 'get the sum of the MRR of the reseller
+                    lResidualMinimumPayout = ws_Residual.Range("B13").Value 'Get the minimum payout of the reseller
+                   
+                
+                    sResidualCurrentReseller = ws_Pivots.Range("E" & iResidualResellerRowLooper).Value 'assignment of the reseller name to the variable
+                    ws_Residual.Range("B4").Value = sResidualCurrentReseller 'assign current reseller as Statement Reseller
+                    iResidualResellerType = ws_Pivots.Range("F" & iResidualResellerRowLooper).Value 'Get the Reseller Type from the Pivots tab
+                    sResidualResellerMasterIndicator = ws_Pivots.Range("G" & iResidualResellerRowLooper).Value 'Get the reseller Master? value from the pivots tab
+                    sResellerWithReducedFields = ws_Pivots.Range("H" & iResidualResellerRowLooper).Value 'Get the reseller with Reduced Fields? value from the pivots tab
+                    
+                    On Error Resume Next
+                        iPartnerID = ws_Residual.Range("B16").Value 'Get the partner ID of the reseller
+                        
+                        If Err.Number <> 0 Then 'error check if the partner ID is invalid
+                            
+                            iPartnerID = Application.WorksheetFunction.VLookup(sResidualCurrentReseller, ws_Pivots.Range("D:D"), 2, 0)
+                        
+                        End If
+                    
+                    On Error GoTo 0
+                    
+                    'If ws_Pivots.Range("F" & iResidualResellerRowLooper).Value = "3" Or ws_Pivots.Range("F" & iResidualResellerRowLooper).Value = "4" Then 'check if reseller is a master/direct residual only FOR MASTER RESELLER FILE GENERATION
+                        
+                        If ws_Residual.Range("B11").Value >= ws_Residual.Range("B13") Or iResidualResellerType = 5 Then 'condition to check if the min payout is met
+                            
+                            If iResidualResellerType = "3" Or (iResidualResellerType = 5 And sResidualResellerMasterIndicator = "Y") Then
+                                
+                                Call CreateResellerFileResidualOnly(sResidualCurrentReseller, "A", iResidualResellerType, sResellerWithReducedFields) 'Get raw data and create file
+                            
+                            ElseIf iResidualResellerType = "4" Then
+                            
+                                Call CreateResellerFileResidualOnly(sResidualCurrentReseller, "C", iResidualResellerType, sResellerWithReducedFields) 'Get raw data and create file
+                            
+                            ElseIf iResidualResellerType = "5" And sResidualResellerMasterIndicator = "N" Then
+                            
+                                Call CreateFileDirectUnderMasterResidualOnly(sResidualCurrentReseller, "AC", "D")
+                                                            
+                            End If
+                            
+                            Windows(st_template).Activate
+                            ws_Residual.copy Before:=Workbooks(s_new_file).Sheets("Detail") 'Copy statement sheet to new file
+                            
+                            Windows(s_new_file).Activate
+                            
+                            Sheets("Residual Only").Name = "Summary"
+                            
+                            'Remove formulas from the Residual Only tab
+                            With Range("A1:B11")
+                                .copy
+                                .PasteSpecial xlPasteValues
+                            End With
+                            
+                            If lResidualSumOfMrr >= lResidualMinimumMrr Then 'condition for the reseller to be paid only when meeting the minimum MRR requirement
+                            
+                                Range("B9").Value = "=Total!" & Sheets("Total").Range("A" & Last_Row).End(xlUp).Offset(1, 0).End(xlToRight).Address
+                              
+                            Else
+                                
+                                Range("B9").Value = 0
+                            
+                            End If
+                            
+                            'Condition for the reseller to be paid only when it meets the minimum MRR payout
+                            
+                            Dim lTotalPayout As Double 'Total Residual Payout
+                            lTotalPayout = 0
+                            
+                            lTotalPayout = Range("B7").Value + Range("B9").Value
+                            
+                            If lTotalPayout >= lResidualMinimumPayout Then
+                            
+                                Range("B11").Value = "=B7+B9"
+                            
+                            Else
+                                
+                                Range("B11").Value = 0
+                            
+                            End If
+                            
+                            'Remove validation and several condition checks
+                            Range("A13:" & Range("B" & Last_Row).End(xlUp).Address).ClearContents
+                            Range("B4").Validation.Delete
+                            Range("E1").Activate
+                            Range("A1").Activate
+                            
+                            'Saves the generated file
+                                
+                                If sResidualResellerMasterIndicator = "Y" Then
+                                        
+                                    On Error Resume Next
+                                    
+                                        ActiveWorkbook.SaveAs filename:=save_fldr.SelectedItems(1) & "\Masters\" & sResidualCurrentReseller & "_" & s_month & ".xlsx"
+                                    
+                                        If Err.Number <> 0 Then 'Ask the user for a new file name if the reseller name contains invalid characters and cannot be saved
+    
+                                            Beep
+                                            sNewFileName = Application.InputBox("Reseller Name:" & s_current_reseller & " contains illegal characters. Use a different filename.")
+                                            ActiveWorkbook.SaveAs filename:=save_fldr.SelectedItems(1) & "\Masters\" & sNewFileName & "_" & s_month & ".xlsx"
+    
+                                        End If
+                                        
+                                        Call StoreToFileLocationTabs(iPartnerID, sCommissionType, sGeneratedFileSaveName, sResidualCurrentReseller, "Masters")
+                                        iNumberOfMastersStatements = iNumberOfMastersStatements + 1
+                                    
+                                    On Error GoTo 0
+
+                                Else
+                                    
+                                    On Error Resume Next
+                                    
+                                    
+                                    
+                                        If Range("B11").Value > 0 Then 'Save file in positive folder under Direct
+                                    
+                                            iNumberOfPositiveStatements = iNumberOfPositiveStatements + 1
+                                            s_fileSaveLocation = save_fldr.SelectedItems(1) & "\Direct\Positive\"
+                                            ActiveWorkbook.SaveAs filename:=save_fldr.SelectedItems(1) & "\Direct\Positive\" & sResidualCurrentReseller & "_" & s_month & ".xlsx"
+                                            sCommissionType = "Positive"
+                                            
+                                        ElseIf Range("B11").Value = 0 And iResidualResellerType = 5 Then 'save to Zero folder
+                                            
+                                            iNumberOfZeroStatements = iNumberOfZeroStatements + 1
+                                            s_fileSaveLocation = save_fldr.SelectedItems(1) & "\Direct\Zero\"
+                                            ActiveWorkbook.SaveAs filename:=save_fldr.SelectedItems(1) & "\Direct\Zero\" & sResidualCurrentReseller & "_" & s_month & ".xlsx"
+                                            sCommissionType = "Zero"
+                                                                        
+                                        ElseIf Range("B11").Value < 0 Then 'Save file in Negative folder under Direct
+                                        
+                                            iNumberOfNegativeStatements = iNumberOfNegativeStatements + 1
+                                            s_fileSaveLocation = save_fldr.SelectedItems(1) & "\Direct\Negative\"
+                                            ActiveWorkbook.SaveAs filename:=save_fldr.SelectedItems(1) & "\Direct\Negative\" & sResidualCurrentReseller & "_" & s_month & ".xlsx"
+                                            sCommissionType = "Negative"
+                                            
+                                        ElseIf Range("B11").Value = 0 And Range("B9").Value = 0 And Range("B7").Value = 0 Then
+                                            
+                                            sCommissionType = "Null" 'Value to disable input to the file location tab
+                                            
+                                        End If
+                                        
+                                        If Err.Number <> 0 Then 'Ask the user for a new file name if the reseller name contains invalid characters and cannot be saved
+    
+                                            Beep
+                                            sNewFileName = Application.InputBox("Reseller Name:" & sResidualCurrentReseller & " contains illegal characters. Use a different filename.")
+                                            ActiveWorkbook.SaveAs filename:=s_fileSaveLocation & sNewFileName & "_" & s_month & ".xlsx"
+    
+                                        End If
+    
+                                    On Error GoTo 0
+                            
+                                End If
+                                
+                                sGeneratedFileSaveName = ActiveWorkbook.FullName 'Store the location of the generated file in the sGeneratedFileSaveName Variable
+                                Application.DisplayAlerts = False 'Close the workbook
+                                ActiveWorkbook.Close
+                                Application.DisplayAlerts = True
+                                
+                                If sCommissionType <> "Null" Then
+                                
+                                    If sResidualResellerMasterIndicator = "Y" Then 'Procedure to store the file location either on the masters file location or Direct File Location
+                                    
+                                        Call StoreToFileLocationTabs(iPartnerID, "Master Reseller", sGeneratedFileSaveName, sResidualCurrentReseller, "Masters")
+                                    
+                                    Else
+                                        
+                                        Call StoreToFileLocationTabs(iPartnerID, sCommissionType, sGeneratedFileSaveName, sResidualCurrentReseller, "Direct")
+                                    
+                                    End If
+                                
+                                End If
+                                
+                                'Save the file location in either the file location master of file location direct
+                                
+                                
+                        End If
+                        
+                        Application.StatusBar = "Checking " & ((iTotalNumberofResellersinStatement) + (iResidualResellerRowLooper - 1)) & " out of " & iTotalNumberofResellersinTemplate & " resellers. " & _
+                                                                Format(((iResidualResellerRowLooper - 1) + iTotalNumberofResellersinStatement) / iTotalNumberofResellersinTemplate, "Percent")
+                        
+                Next iResidualResellerRowLooper
+                
+                ws_Residual.Range("B4").Value = ws_Pivots.Range("E2").Value
+                        
+            End If
+            '***
+            
+    End If
+    '**
+    
+    MsgBox ("Done")
+    
+End If
+'*
+    
+Application.ScreenUpdating = True
+
+
+
+End Sub
+
+Sub Create_reseller_file_master(reseller_name As String, col_letter As String)
+
+Dim Incremental_Sales_Headers() As Variant
+Dim Incremental_Sales_headers_col_counter As Integer
+Dim Incremental_Sales_Data() As Variant
+Dim Incremental_Array_row_counter As Integer
+Dim Incremental_Array_col_counter As Integer
+Dim Incremental_row_counter As Integer
+Dim Incremental_col_counter As Integer
+Dim Incremental_Total_row As Integer
+
+'**************************************************************
+'Get the Incremental Sales data depending if the reseller is an Express or Not
+'**************************************************************
+ws_Incremental.Activate
+ws_Incremental.AutoFilterMode = False
+
+Erase Incremental_Sales_Data
+
+Incremental_Total_row = Range("A1:" & Range("A" & Last_Row).End(xlUp).Address).Count 'Count the number of loop to be performed to get the incremental data
+Incremental_row_counter = 1
+Incremental_Array_row_counter = 0
+
+If InStr(1, reseller_name, "Express", vbTextCompare) > 0 Then 'Condition ot check if the reseller is an express reseller
+    
+    ReDim Preserve Incremental_Sales_Headers(1, 61)
+    For Incremental_Sales_headers_col_counter = 1 To 61 'Get the headers if the reseller is an express reseller
+        
+        Incremental_Sales_Headers(1, Incremental_Sales_headers_col_counter) = Range("B1").Offset(0, Incremental_Sales_headers_col_counter - 1).Value
+    
+    Next Incremental_Sales_headers_col_counter
+    
+    For Incremental_row_counter = 1 To Incremental_Total_row 'Get the incremental raw data for the selected reseller
+        
+        If Range(col_letter & Incremental_row_counter).Value = reseller_name Then
+            
+            Incremental_Array_row_counter = Incremental_Array_row_counter + 1
+            For Incremental_Array_col_counter = 1 To 61
+                ReDim Preserve Incremental_Sales_Data(Incremental_Total_row, 61)
+                'Store the incremental raw data to the incremental data array
+                Incremental_Sales_Data(Incremental_Array_row_counter, Incremental_Array_col_counter) = Range("B" & Incremental_row_counter).Offset(0, Incremental_Array_col_counter - 1).Value
+            
+            Next Incremental_Array_col_counter
+        
+        End If
+        
+    Next Incremental_row_counter
+
+Else 'If the reseller is not an express reseller
+    
+    ReDim Preserve Incremental_Sales_Headers(1, 61)
+    For Incremental_Sales_headers_col_counter = 1 To 58 'Get the headers if the reseller is an express reseller
+        
+        Incremental_Sales_Headers(1, Incremental_Sales_headers_col_counter) = Range("B1").Offset(0, Incremental_Sales_headers_col_counter - 1).Value
+    
+    Next Incremental_Sales_headers_col_counter
+    
+    For Incremental_Sales_headers_col_counter = 58 To 61 'Get the headers if the reseller is an express reseller
+        
+        Incremental_Sales_Headers(1, Incremental_Sales_headers_col_counter) = ""
+    
+    Next Incremental_Sales_headers_col_counter
+    
+    Incremental_row_counter = 1
+    Incremental_Array_row_counter = 0
+    
+    For Incremental_row_counter = 1 To Incremental_Total_row 'Get the incremental raw data for the selected reseller
+        
+        If Range(col_letter & Incremental_row_counter).Value = reseller_name Then
+            
+            ReDim Preserve Incremental_Sales_Data(Incremental_Total_row, 61)
+            Incremental_Array_row_counter = Incremental_Array_row_counter + 1
+            For Incremental_Array_col_counter = 1 To 57
+                
+                'Store the incremental raw data to the incremental data array
+                Incremental_Sales_Data(Incremental_Array_row_counter, Incremental_Array_col_counter) = Range("B" & Incremental_row_counter).Offset(0, Incremental_Array_col_counter - 1).Value
+            
+            Next Incremental_Array_col_counter
+            
+            For Incremental_Array_col_counter = 58 To 61
+                'Store the incremental raw data to the incremental data array
+                Incremental_Sales_Data(Incremental_Array_row_counter, Incremental_Array_col_counter) = ""
+            
+            Next Incremental_Array_col_counter
+            
+        End If
+        
+    Next Incremental_row_counter
+
+End If
+
+'*************************************************
+'GET THE TOTAL SALES DATA
+'*************************************************
+Dim Total_Sales_Headers() As Variant
+Dim Total_Sales_headers_col_counter As Integer
+Dim Total_Sales_Data() As Variant
+Dim Total_Array_row_counter As Integer
+Dim Total_Array_col_counter As Integer
+Dim Total_row_counter As Integer
+Dim Total_col_counter As Integer
+Dim Total_Total_row As Integer
+
+'Get the Total Sales data depending if the reseller is an Express or Not
+ws_Total.Activate
+ws_Total.AutoFilterMode = False
+
+Erase Total_Sales_Data
+Total_Total_row = Range("A1:" & Range("A" & Last_Row).End(xlUp).Address).Count 'Count the number of loop to be performed to get the Total data
+
+Total_row_counter = 1
+Total_Array_row_counter = 0
+
+If InStr(1, reseller_name, "Express", vbTextCompare) > 0 Then 'Condition ot check if the reseller is an express reseller
+    
+    For Total_Sales_headers_col_counter = 1 To 22 'Get the headers if the reseller is an express reseller
+        
+        ReDim Preserve Total_Sales_Headers(1, 31)
+        Total_Sales_Headers(1, Total_Sales_headers_col_counter) = Range("B1").Offset(0, Total_Sales_headers_col_counter - 1).Value
+        
+    Next Total_Sales_headers_col_counter
+    
+    'Manual Storage of Additional columns
+        
+        Total_Sales_Headers(1, 23) = "RC Residual %"
+        Total_Sales_Headers(1, 24) = Range("B1").Offset(0, 26).Value
+        Total_Sales_Headers(1, 25) = "Contact Center Residual %"
+        Total_Sales_Headers(1, 26) = Range("B1").Offset(0, 29).Value
+        Total_Sales_Headers(1, 27) = Range("B1").Offset(0, 30).Value
+        Total_Sales_Headers(1, 28) = Range("B1").Offset(0, 32).Value
+        Total_Sales_Headers(1, 29) = Range("B1").Offset(0, 33).Value
+        Total_Sales_Headers(1, 30) = Range("B1").Offset(0, 34).Value
+        Total_Sales_Headers(1, 31) = Range("B1").Offset(0, 35).Value
+    
+    For Total_row_counter = 1 To Total_Total_row 'Get the Total raw data for the selected reseller
+        
+        If Range(col_letter & Total_row_counter).Value = reseller_name Then
+            
+            Total_Array_row_counter = Total_Array_row_counter + 1
+            ReDim Preserve Total_Sales_Data(Total_Total_row, 31)
+            For Total_Array_col_counter = 1 To 22
+                
+                'Store the Total raw data to the Total data array
+                Total_Sales_Data(Total_Array_row_counter, Total_Array_col_counter) = Range("B" & Total_row_counter).Offset(0, Total_Array_col_counter - 1).Value
+                
+            Next Total_Array_col_counter
+            
+                'Manual Storage of additional column
+                Total_Sales_Data(Total_Array_row_counter, 23) = Range("B" & Total_row_counter).Offset(0, 25).Value
+                Total_Sales_Data(Total_Array_row_counter, 24) = Range("B" & Total_row_counter).Offset(0, 26).Value
+                Total_Sales_Data(Total_Array_row_counter, 25) = Range("B" & Total_row_counter).Offset(0, 28).Value
+                Total_Sales_Data(Total_Array_row_counter, 26) = Range("B" & Total_row_counter).Offset(0, 29).Value
+                Total_Sales_Data(Total_Array_row_counter, 27) = Range("B" & Total_row_counter).Offset(0, 30).Value
+                Total_Sales_Data(Total_Array_row_counter, 28) = Range("B" & Total_row_counter).Offset(0, 32).Value
+                Total_Sales_Data(Total_Array_row_counter, 29) = Range("B" & Total_row_counter).Offset(0, 33).Value
+                Total_Sales_Data(Total_Array_row_counter, 30) = Range("B" & Total_row_counter).Offset(0, 34).Value
+                Total_Sales_Data(Total_Array_row_counter, 31) = Range("B" & Total_row_counter).Offset(0, 35).Value
+            
+        
+        End If
+        
+    Next Total_row_counter
+
+Else 'If the reseller is not an express reseller
+    
+Total_row_counter = 1
+Total_Array_row_counter = 0
+    
+    
+    For Total_Sales_headers_col_counter = 1 To 22 'Get the headers if the reseller is an express reseller
+        ReDim Preserve Total_Sales_Headers(1, 31)
+        Total_Sales_Headers(1, Total_Sales_headers_col_counter) = Range("B1").Offset(0, Total_Sales_headers_col_counter - 1).Value
+       
+         
+    Next Total_Sales_headers_col_counter
+    
+        Total_Sales_Headers(1, 23) = "RC Residual %"
+        Total_Sales_Headers(1, 24) = Range("B1").Offset(0, 26).Value
+        Total_Sales_Headers(1, 25) = "Contact Center Residual %"
+        Total_Sales_Headers(1, 26) = Range("B1").Offset(0, 29).Value
+        Total_Sales_Headers(1, 27) = Range("B1").Offset(0, 30).Value
+        Total_Sales_Headers(1, 28) = ""
+        Total_Sales_Headers(1, 29) = ""
+        Total_Sales_Headers(1, 30) = ""
+        Total_Sales_Headers(1, 31) = ""
+    
+    For Total_row_counter = 1 To Total_Total_row 'Get the Total raw data for the selected reseller
+    
+        If Range(col_letter & Total_row_counter).Value = reseller_name Then
+            
+            Total_Array_row_counter = Total_Array_row_counter + 1
+            
+            For Total_Array_col_counter = 1 To 22
+                ReDim Preserve Total_Sales_Data(Total_Total_row, 31)
+                'Store the Total raw data to the Total data array
+                Total_Sales_Data(Total_Array_row_counter, Total_Array_col_counter) = Range("B" & Total_row_counter).Offset(0, Total_Array_col_counter - 1).Value
+                
+            Next Total_Array_col_counter
+                            
+                'Manual Storage of additional column
+                Total_Sales_Data(Total_Array_row_counter, 23) = Range("B" & Total_row_counter).Offset(0, 25).Value
+                Total_Sales_Data(Total_Array_row_counter, 24) = Range("B" & Total_row_counter).Offset(0, 26).Value
+                Total_Sales_Data(Total_Array_row_counter, 25) = Range("B" & Total_row_counter).Offset(0, 28).Value
+                Total_Sales_Data(Total_Array_row_counter, 26) = Range("B" & Total_row_counter).Offset(0, 29).Value
+                Total_Sales_Data(Total_Array_row_counter, 27) = Range("B" & Total_row_counter).Offset(0, 30).Value
+                Total_Sales_Data(Total_Array_row_counter, 28) = ""
+                Total_Sales_Data(Total_Array_row_counter, 29) = ""
+                Total_Sales_Data(Total_Array_row_counter, 30) = ""
+                Total_Sales_Data(Total_Array_row_counter, 31) = ""
+        
+        End If
+        
+    Next Total_row_counter
+
+End If
+
+'Create the file
+Dim i_Unload_data_row_loop As Integer
+Dim i_Unload_data_col_loop As Integer
+
+st_template = ActiveWorkbook.Name 'Store name of template
+
+Workbooks.Add 'Create the new file
+s_new_file = ActiveWorkbook.Name
+
+Application.DisplayAlerts = False
+Sheets("Sheet1").Delete
+Application.DisplayAlerts = True
+Sheets("Sheet2").Name = "Detail"
+Sheets("Sheet3").Name = "Total"
+                        
+'Unload Incremental Data
+Sheets("Detail").Activate
+
+'Unload Headers
+For i_Unload_data_col_loop = 1 To 61
+
+    Range("A1").Offset(0, i_Unload_data_col_loop - 1).Value = Incremental_Sales_Headers(1, i_Unload_data_col_loop)
+    
+Next i_Unload_data_col_loop
+
+i_Unload_data_col_loop = 0
+i_Unload_data_row_loop = 0
+
+'unload raw data
+For i_Unload_data_row_loop = 1 To Incremental_Array_row_counter
+    
+    For i_Unload_data_col_loop = 1 To 61
+        
+        Range("A2").Offset(i_Unload_data_row_loop - 1, i_Unload_data_col_loop - 1).Value = Incremental_Sales_Data(i_Unload_data_row_loop, i_Unload_data_col_loop)
+    
+    Next i_Unload_data_col_loop
+
+Next i_Unload_data_row_loop
+
+'Unload Total Sales Data
+Sheets("Total").Activate
+
+'Unload Headers
+For i_Unload_data_col_loop = 1 To 31
+    
+    Range("A1").Offset(0, i_Unload_data_col_loop - 1).Value = Total_Sales_Headers(1, i_Unload_data_col_loop)
+
+Next i_Unload_data_col_loop
+
+i_Unload_data_col_loop = 0
+i_Unload_data_row_loop = 0
+
+'unload raw data
+For i_Unload_data_row_loop = 1 To Total_Array_row_counter
+    
+    For i_Unload_data_col_loop = 1 To 31
+        
+        Range("A2").Offset(i_Unload_data_row_loop - 1, i_Unload_data_col_loop - 1).Value = Total_Sales_Data(i_Unload_data_row_loop, i_Unload_data_col_loop)
+    
+    Next i_Unload_data_col_loop
+
+Next i_Unload_data_row_loop
+
+'Formatting of Incremental Sales and Total Sales Tabs
+
+Dim offset_count As Integer
+'Format Incremental Sheet
+Sheets("Detail").Activate
+offset_count = Range("A1:" & Range("A" & Last_Row).End(xlUp).Address).Count
+
+Dim r_sumrange As String
+
+With Range("A1:" & Range("A1").End(xlToRight).Offset(offset_count - 1, 0).Address)
+    .Select
+    .Font.Size = 10
+    .Font.Name = "calibri"
+    .Borders.LineStyle = xlContinuous
+    .Borders.Weight = xlThin
+    .Borders.ColorIndex = xlAutomatic
+    .HorizontalAlignment = xlCenter
+    .Columns.AutoFit
+End With
+r_sumrange = Range("BE2:" & Range("BE" & Last_Row).End(xlUp).Address).Address
+
+If Range("A1").End(xlDown).Address <> "$A$" & Last_Row Then
+
+    Range("BE" & Last_Row).End(xlUp).Offset(1, 0).Value = "=sum(" & r_sumrange & ")"
+
+Else
+    
+    Range("BE" & Last_Row).End(xlUp).Offset(1, 0).Value = 0
+    
+End If
+
+Range("BO1").Activate
+Range("A1").Activate
+
+'Format Total Sales
+Sheets("Total").Activate
+offset_count = Range("A1:" & Range("A" & Last_Row).End(xlUp).Address).Count
+
+With Range("A1:" & Range("A1").End(xlToRight).Offset(offset_count - 1, 0).Address)
+    .Select
+    .Font.Size = 10
+    .Font.Name = "calibri"
+    .Borders.LineStyle = xlContinuous
+    .Borders.Weight = xlThin
+    .Borders.ColorIndex = xlAutomatic
+    .HorizontalAlignment = xlCenter
+    .Columns.AutoFit
+End With
+
+If Range("A1").End(xlDown).Address <> "$A$" & Last_Row Then
+    
+    Range("AA" & Last_Row).End(xlUp).Offset(1, 0).Value = "=sum(" & Range("AA2:" & Range("AA" & Last_Row).End(xlUp).Address).Address & ")"
+
+Else
+
+    Range("AA" & Last_Row).End(xlUp).Offset(1, 0).Value = 0
+
+End If
+
+Range("BO1").Activate
+Range("A1").Activate
+
+End Sub
+
+Sub Chargeback(reseller_name)
+
+Dim chargeback_array_data() As Variant
+Dim chargeback_row_counter As Integer
+Dim chargeback_col_counter As Integer
+Dim chargeback_loop_counter As Integer
+Dim chargeback_total_number_of_entry As Integer
+
+Windows(st_template).Activate 'activate the template
+
+ws_Chargeback.Activate 'activate chargeback tab
+ws_Chargeback.AutoFilterMode = False
+
+chargeback_total_number_of_entry = Range("A2:" & Range("A" & Last_Row).End(xlUp).Address).Count 'Count the total number of chargeback entries
+ReDim Preserve chargeback_array_data(chargeback_total_number_of_entry, 2) 'fix chargeback data array
+chargeback_row_counter = 0 'Initialize value of the chargeback row counter
+
+For chargeback_loop_counter = 1 To chargeback_total_number_of_entry 'Loop to get the chargeback data of that reseller
+    
+    If Range("A" & chargeback_loop_counter).Value = reseller_name Then
+        
+        chargeback_row_counter = chargeback_row_counter + 1
+            
+        For chargeback_col_counter = 1 To 2
+            
+            chargeback_array_data(chargeback_row_counter, chargeback_col_counter) = Range("A" & chargeback_loop_counter).Offset(0, chargeback_col_counter).Value 'record the chargeback value in the array
+        
+        Next chargeback_col_counter
+    
+    End If
+    
+Next chargeback_loop_counter
+
+Windows(s_new_file).Activate 'Activate the new file
+
+Sheets("Chargeback").Activate 'activate the chargeback tab
+
+    For chargeback_loop_counter = 1 To chargeback_row_counter 'Loop to unload chargeback data to chargeback tabs in the new file
+        
+        For chargeback_col_counter = 1 To 2
+        
+            Range("A2").Offset(chargeback_loop_counter - 1, chargeback_col_counter - 1).Value = chargeback_array_data(chargeback_loop_counter, chargeback_col_counter)
+        
+        Next chargeback_col_counter
+    
+    Next chargeback_loop_counter
+    
+
+End Sub
+
+Sub CreateResellerFileResidualOnly(sResellerName As String, sColumnLookup As String, iResellerType As Integer, sResellerWithReducedField As String)
+
+Dim Incremental_Sales_Headers() As Variant
+Dim Incremental_Sales_headers_col_counter As Integer
+Dim Incremental_Sales_Data() As Variant
+Dim Incremental_Array_row_counter As Integer
+Dim Incremental_Array_col_counter As Integer
+Dim Incremental_row_counter As Integer
+Dim Incremental_col_counter As Integer
+Dim Incremental_Total_row As Integer
+
+'**************************************************************
+'Get the Incremental Sales data depending if the reseller is an Express or Not
+'**************************************************************
+ws_Incremental.Activate
+ws_Incremental.AutoFilterMode = False
+
+Erase Incremental_Sales_Data
+
+Incremental_Total_row = Range("A1:" & Range("A" & Last_Row).End(xlUp).Address).Count 'Count the number of loop to be performed to get the incremental data
+Incremental_row_counter = 1
+Incremental_Array_row_counter = 0
+
+ReDim Preserve Incremental_Sales_Headers(1, 55)
+For Incremental_Sales_headers_col_counter = 1 To 55 'Get the headers if the reseller is an express reseller
+    
+    Incremental_Sales_Headers(1, Incremental_Sales_headers_col_counter) = Range("B1").Offset(0, Incremental_Sales_headers_col_counter - 1).Value
+
+Next Incremental_Sales_headers_col_counter
+
+For Incremental_row_counter = 1 To Incremental_Total_row 'Get the incremental raw data for the selected reseller
+    
+    If Range(sColumnLookup & Incremental_row_counter).Value = sResellerName Then
+        
+        Incremental_Array_row_counter = Incremental_Array_row_counter + 1
+        For Incremental_Array_col_counter = 1 To 55
+            ReDim Preserve Incremental_Sales_Data(Incremental_Total_row, 55)
+            'Store the incremental raw data to the incremental data array
+            Incremental_Sales_Data(Incremental_Array_row_counter, Incremental_Array_col_counter) = Range("B" & Incremental_row_counter).Offset(0, Incremental_Array_col_counter - 1).Value
+        
+        Next Incremental_Array_col_counter
+    
+    End If
+    
+Next Incremental_row_counter
+    
+'*************************************************
+'GET THE TOTAL SALES DATA
+'*************************************************
+Dim Total_Sales_Headers() As Variant
+Dim Total_Sales_headers_col_counter As Integer
+Dim Total_Sales_Data() As Variant
+Dim Total_Array_row_counter As Integer
+Dim Total_Array_col_counter As Integer
+Dim Total_row_counter As Integer
+Dim Total_col_counter As Integer
+Dim Total_Total_row As Integer
+
+'Get the Total Sales data depending if the reseller is an Express or Not
+ws_Total.Activate
+ws_Total.AutoFilterMode = False
+
+Erase Total_Sales_Data
+
+Total_Total_row = Range("A1:" & Range("A" & Last_Row).End(xlUp).Address).Count 'Count the number of loop to be performed to get the Total data
+
+Total_row_counter = 1
+Total_Array_row_counter = 0
+
+For Total_Sales_headers_col_counter = 1 To 22 'Get the headers if the reseller is an express reseller
+    
+    ReDim Preserve Total_Sales_Headers(1, 27)
+    Total_Sales_Headers(1, Total_Sales_headers_col_counter) = Range("B1").Offset(0, Total_Sales_headers_col_counter - 1).Value
+    
+Next Total_Sales_headers_col_counter
+
+'Manual Storage of Additional columns
+    
+    Total_Sales_Headers(1, 23) = "RC Residual %"
+    Total_Sales_Headers(1, 24) = Range("B1").Offset(0, 26).Value
+    Total_Sales_Headers(1, 25) = "Contact Center Residual %"
+    Total_Sales_Headers(1, 26) = Range("B1").Offset(0, 29).Value
+    Total_Sales_Headers(1, 27) = Range("B1").Offset(0, 30).Value
+
+For Total_row_counter = 1 To Total_Total_row 'Get the Total raw data for the selected reseller
+    
+    If Range(sColumnLookup & Total_row_counter).Value = sResellerName Then
+        
+        Total_Array_row_counter = Total_Array_row_counter + 1
+        ReDim Preserve Total_Sales_Data(Total_Total_row, 27)
+        
+        For Total_Array_col_counter = 1 To 22
+            
+            'Store the Total raw data to the Total data array
+            Total_Sales_Data(Total_Array_row_counter, Total_Array_col_counter) = Range("B" & Total_row_counter).Offset(0, Total_Array_col_counter - 1).Value
+            
+        Next Total_Array_col_counter
+        
+            'Manual Storage of additional column
+            Total_Sales_Data(Total_Array_row_counter, 23) = Range("B" & Total_row_counter).Offset(0, 25).Value
+            Total_Sales_Data(Total_Array_row_counter, 24) = Range("B" & Total_row_counter).Offset(0, 26).Value
+            Total_Sales_Data(Total_Array_row_counter, 25) = Range("B" & Total_row_counter).Offset(0, 28).Value
+            Total_Sales_Data(Total_Array_row_counter, 26) = Range("B" & Total_row_counter).Offset(0, 29).Value
+            Total_Sales_Data(Total_Array_row_counter, 27) = Range("B" & Total_row_counter).Offset(0, 30).Value
+    
+    End If
+    
+Next Total_row_counter
+
+'******************************
+'GET ACCRUED COMMISSIONS DATA
+'******************************
+
+If iResellerType = 5 Then
+
+    Dim AccruedData() As Variant
+    Dim AccruedHeaders() As Variant
+    Dim iAccruedHeadersColumnCounter As Integer
+    Dim iAccruedDataColumnCounter As Integer
+    Dim iAccruedDataRowLooper As Integer
+    Dim iAccruedDataArrayRowCounter As Integer
+    Dim iTotalAccruedData As Integer
+    
+    ws_Commissions_Accrued.Activate 'Activate the accrued commissions tab
+    ws_Commissions_Accrued.AutoFilterMode = False
+    Erase AccruedData
+    
+    iTotalAccruedData = ws_Commissions_Accrued.Range("A2:" & ws_Commissions_Accrued.Range("A" & Last_Row).End(xlUp).Address).Count 'Count the total rows of accrued data
+    
+    'Get the Accrued Headers
+    ReDim Preserve AccruedHeaders(1, 3)
+        
+    For iAccruedHeadersColumnCounter = 1 To 3
+        
+        AccruedHeaders(1, iAccruedHeadersColumnCounter) = Range("C1").Offset(0, iAccruedHeadersColumnCounter - 1).Value
+    
+    Next iAccruedHeadersColumnCounter
+    
+    iAccruedDataArrayRowCounter = 0
+    
+    'Get the Accrued Raw Data
+    ReDim Preserve AccruedData(iTotalAccruedData, 3)
+    For iAccruedDataRowLooper = 1 To iTotalAccruedData
+        
+        If Range("B" & iAccruedDataRowLooper).Value = sResellerName Then
+            
+            iAccruedDataArrayRowCounter = iAccruedDataArrayRowCounter + 1
+            For iAccruedDataColumnCounter = 1 To 3
+                
+                AccruedData(iAccruedDataArrayRowCounter, iAccruedDataColumnCounter) = Range("C" & iAccruedDataRowLooper).Offset(0, iAccruedDataColumnCounter - 1).Value
+            
+            Next iAccruedDataColumnCounter
+        
+        End If
+    
+    Next iAccruedDataRowLooper
+
+End If
+
+'Create the file
+Dim i_Unload_data_row_loop As Integer
+Dim i_Unload_data_col_loop As Integer
+
+st_template = ActiveWorkbook.Name 'Store name of template
+
+Workbooks.Add 'Create the new file
+s_new_file = ActiveWorkbook.Name
+
+Application.DisplayAlerts = False
+Sheets("Sheet1").Delete
+Application.DisplayAlerts = True
+Sheets("Sheet2").Name = "Detail"
+Sheets("Sheet3").Name = "Total"
+                        
+'Unload Incremental Data
+Sheets("Detail").Activate
+
+'Unload Headers
+For i_Unload_data_col_loop = 1 To 55
+
+    Range("A1").Offset(0, i_Unload_data_col_loop - 1).Value = Incremental_Sales_Headers(1, i_Unload_data_col_loop)
+    
+Next i_Unload_data_col_loop
+
+i_Unload_data_col_loop = 0
+i_Unload_data_row_loop = 0
+
+'unload Incremental raw data
+For i_Unload_data_row_loop = 1 To Incremental_Array_row_counter
+    
+    For i_Unload_data_col_loop = 1 To 55
+        
+        Range("A2").Offset(i_Unload_data_row_loop - 1, i_Unload_data_col_loop - 1).Value = Incremental_Sales_Data(i_Unload_data_row_loop, i_Unload_data_col_loop)
+    
+    Next i_Unload_data_col_loop
+
+Next i_Unload_data_row_loop
+
+'Unload Total Sales Data
+Sheets("Total").Activate
+
+'Unload Total Sales Headers
+For i_Unload_data_col_loop = 1 To 27
+    
+    Range("A1").Offset(0, i_Unload_data_col_loop - 1).Value = Total_Sales_Headers(1, i_Unload_data_col_loop)
+
+Next i_Unload_data_col_loop
+
+i_Unload_data_col_loop = 0
+i_Unload_data_row_loop = 0
+
+'unload Total Sales raw data
+For i_Unload_data_row_loop = 1 To Total_Array_row_counter
+    
+    For i_Unload_data_col_loop = 1 To 27
+        
+        Range("A2").Offset(i_Unload_data_row_loop - 1, i_Unload_data_col_loop - 1).Value = Total_Sales_Data(i_Unload_data_row_loop, i_Unload_data_col_loop)
+    
+    Next i_Unload_data_col_loop
+
+Next i_Unload_data_row_loop
+
+ 'Unload Accrued Commissions Data if applicable
+If iResellerType = 5 Then
+      
+    Sheets.Add after:=Sheets("Total")
+    Sheets("Sheet4").Name = "Accrued Commissions"
+    Sheets("Accrued Commissions").Activate
+    
+    'Unload Accrued Headers"
+    
+    For i_Unload_data_col_loop = 1 To 3
+        Range("A1").Offset(0, i_Unload_data_col_loop - 1).Value = AccruedHeaders(1, i_Unload_data_col_loop)
+    Next i_Unload_data_col_loop
+    
+    'Unload Accrued Raw Data
+    For i_Unload_data_row_loop = 1 To iAccruedDataArrayRowCounter
+        
+        For i_Unload_data_col_loop = 1 To 3
+        
+            Range("A2").Offset(i_Unload_data_row_loop - 1, i_Unload_data_col_loop - 1).Value = AccruedData(i_Unload_data_row_loop, i_Unload_data_col_loop)
+        
+        Next i_Unload_data_col_loop
+    
+    Next i_Unload_data_row_loop
+    
+    'Format Accrued Commissions Tab
+    
+    With Range("A1:" & Range("A" & Last_Row).End(xlUp).Offset(0, 2).Address)
+     .Select
+        .Font.Size = 10
+        .Font.Name = "calibri"
+        .Borders.LineStyle = xlContinuous
+        .Borders.Weight = xlThin
+        .Borders.ColorIndex = xlAutomatic
+        .HorizontalAlignment = xlCenter
+        .Columns.AutoFit
+    End With
+    
+    Range("BO1").Activate
+    Range("A1").Activate
+
+End If
+
+
+'Formatting of Incremental Sales and Total Sales Tabs
+
+Dim offset_count As Integer
+'Format Incremental Sheet
+Sheets("Detail").Activate
+offset_count = Range("A1:" & Range("A" & Last_Row).End(xlUp).Address).Count
+
+Dim r_sumrange As String
+
+With Range("A1:" & Range("A1").End(xlToRight).Offset(offset_count - 1, 0).Address)
+    .Select
+    .Font.Size = 10
+    .Font.Name = "calibri"
+    .Borders.LineStyle = xlContinuous
+    .Borders.Weight = xlThin
+    .Borders.ColorIndex = xlAutomatic
+    .HorizontalAlignment = xlCenter
+    .Columns.AutoFit
+End With
+
+Range("BO1").Activate
+Range("A1").Activate
+
+'Format Total Sales
+Sheets("Total").Activate
+offset_count = Range("A1:" & Range("A" & Last_Row).End(xlUp).Address).Count
+
+With Range("A1:" & Range("A1").End(xlToRight).Offset(offset_count - 1, 0).Address)
+    .Select
+    .Font.Size = 10
+    .Font.Name = "calibri"
+    .Borders.LineStyle = xlContinuous
+    .Borders.Weight = xlThin
+    .Borders.ColorIndex = xlAutomatic
+    .HorizontalAlignment = xlCenter
+    .Columns.AutoFit
+End With
+
+'Sum the total residual Payout if there are MRRs
+If Range("A1").End(xlDown).Address <> "$A$" & Last_Row Then
+    
+    Range("AA" & Last_Row).End(xlUp).Offset(1, 0).Value = "=sum(" & Range("AA2:" & Range("AA" & Last_Row).End(xlUp).Address).Address & ")"
+
+Else
+
+    Range("AA" & Last_Row).End(xlUp).Offset(1, 0).Value = 0
+
+End If
+
+Range("BO1").Activate
+Range("A1").Activate
+
+If sResellerWithReducedField = "Y" Then
+    
+    Sheets("Detail").Activate
+    Range("AQ:AX").Delete
+    
+    Sheets("Total").Activate
+    Range("G:G").Delete
+
+End If
+
+End Sub
+'Procedure for the file generation of
+Sub CreateFileDirectUnderMasterResidualOnly(sResellerName As String, sIncrementalColumnLookup, sTotalColumnLookup As String)
+
+Dim Incremental_Sales_Headers() As Variant
+Dim Incremental_Sales_headers_col_counter As Integer
+Dim Incremental_Sales_Data() As Variant
+Dim Incremental_Array_row_counter As Integer
+Dim Incremental_Array_col_counter As Integer
+Dim Incremental_row_counter As Integer
+Dim Incremental_col_counter As Integer
+Dim Incremental_Total_row As Integer
+
+'**************************************************************
+'Get the Incremental Sales data depending if the reseller is an Express or Not
+'**************************************************************
+ws_Incremental.Activate
+ws_Incremental.AutoFilterMode = False
+
+Erase Incremental_Sales_Data
+
+Incremental_Total_row = Range("A1:" & Range("A" & Last_Row).End(xlUp).Address).Count 'Count the number of loop to be performed to get the incremental data
+Incremental_row_counter = 1
+Incremental_Array_row_counter = 0
+
+ReDim Preserve Incremental_Sales_Headers(1, 55)
+For Incremental_Sales_headers_col_counter = 1 To 55 'Get the headers if the reseller is an express reseller
+    
+    Incremental_Sales_Headers(1, Incremental_Sales_headers_col_counter) = Range("B1").Offset(0, Incremental_Sales_headers_col_counter - 1).Value
+
+Next Incremental_Sales_headers_col_counter
+
+For Incremental_row_counter = 1 To Incremental_Total_row 'Get the incremental raw data for the selected reseller
+    
+    If Range(sIncrementalColumnLookup & Incremental_row_counter).Value = sResellerName Then
+        
+        Incremental_Array_row_counter = Incremental_Array_row_counter + 1
+        For Incremental_Array_col_counter = 1 To 55
+            ReDim Preserve Incremental_Sales_Data(Incremental_Total_row, 55)
+            'Store the incremental raw data to the incremental data array
+            Incremental_Sales_Data(Incremental_Array_row_counter, Incremental_Array_col_counter) = Range("B" & Incremental_row_counter).Offset(0, Incremental_Array_col_counter - 1).Value
+        
+        Next Incremental_Array_col_counter
+    
+    End If
+    
+Next Incremental_row_counter
+    
+'*************************************************
+'GET THE TOTAL SALES DATA
+'*************************************************
+Dim Total_Sales_Headers() As Variant
+Dim Total_Sales_headers_col_counter As Integer
+Dim Total_Sales_Data() As Variant
+Dim Total_Array_row_counter As Integer
+Dim Total_Array_col_counter As Integer
+Dim Total_row_counter As Integer
+Dim Total_Total_row As Integer
+
+'Get the Total Sales data depending if the reseller is an Express or Not
+ws_Total.Activate
+ws_Total.AutoFilterMode = False
+
+Erase Total_Sales_Data
+
+Total_Total_row = Range("A1:" & Range("A" & Last_Row).End(xlUp).Address).Count 'Count the number of loop to be performed to get the Total data
+
+Total_row_counter = 1
+Total_Array_row_counter = 0
+
+For Total_Sales_headers_col_counter = 1 To 22 'Get the headers if the reseller is an express reseller
+    
+    ReDim Preserve Total_Sales_Headers(1, 27)
+    Total_Sales_Headers(1, Total_Sales_headers_col_counter) = Range("B1").Offset(0, Total_Sales_headers_col_counter - 1).Value
+    
+Next Total_Sales_headers_col_counter
+
+'Manual Storage of Additional columns
+    
+    Total_Sales_Headers(1, 23) = "RC Residual %"
+    Total_Sales_Headers(1, 24) = Range("B1").Offset(0, 26).Value
+    Total_Sales_Headers(1, 25) = "Contact Center Residual %"
+    Total_Sales_Headers(1, 26) = Range("B1").Offset(0, 29).Value
+    Total_Sales_Headers(1, 27) = Range("B1").Offset(0, 30).Value
+
+For Total_row_counter = 1 To Total_Total_row 'Get the Total raw data for the selected reseller
+    
+    If Range(sTotalColumnLookup & Total_row_counter).Value = sResellerName Then
+        
+        Total_Array_row_counter = Total_Array_row_counter + 1
+        ReDim Preserve Total_Sales_Data(Total_Total_row, 27)
+        
+        For Total_Array_col_counter = 1 To 22
+            
+            'Store the Total raw data to the Total data array
+            Total_Sales_Data(Total_Array_row_counter, Total_Array_col_counter) = Range("B" & Total_row_counter).Offset(0, Total_Array_col_counter - 1).Value
+            
+        Next Total_Array_col_counter
+        
+            'Manual Storage of additional column
+            Total_Sales_Data(Total_Array_row_counter, 23) = Range("B" & Total_row_counter).Offset(0, 37).Value
+            Total_Sales_Data(Total_Array_row_counter, 24) = Range("B" & Total_row_counter).Offset(0, 38).Value
+            Total_Sales_Data(Total_Array_row_counter, 25) = Range("B" & Total_row_counter).Offset(0, 40).Value
+            Total_Sales_Data(Total_Array_row_counter, 26) = Range("B" & Total_row_counter).Offset(0, 41).Value
+            Total_Sales_Data(Total_Array_row_counter, 27) = Range("B" & Total_row_counter).Offset(0, 42).Value
+    
+    End If
+    
+Next Total_row_counter
+
+'******************************
+'GET ACCRUED COMMISSIONS DATA
+'******************************
+Dim AccruedData() As Variant
+Dim AccruedHeaders() As Variant
+Dim iAccruedHeadersColumnCounter As Integer
+Dim iAccruedDataColumnCounter As Integer
+Dim iAccruedDataRowLooper As Integer
+Dim iAccruedDataArrayRowCounter As Integer
+Dim iTotalAccruedData As Integer
+
+ws_Commissions_Accrued.Activate 'Activate the accrued commissions tab
+ws_Commissions_Accrued.AutoFilterMode = False
+Erase AccruedData
+
+iTotalAccruedData = ws_Commissions_Accrued.Range("A2:" & ws_Commissions_Accrued.Range("A" & Last_Row).End(xlUp).Address).Count 'Count the total rows of accrued data
+
+'Get the Accrued Headers
+ReDim Preserve AccruedHeaders(1, 3)
+    
+For iAccruedHeadersColumnCounter = 1 To 3
+    
+    AccruedHeaders(1, iAccruedHeadersColumnCounter) = Range("C1").Offset(0, iAccruedHeadersColumnCounter - 1).Value
+
+Next iAccruedHeadersColumnCounter
+
+iAccruedDataArrayRowCounter = 0
+
+'Get the Accrued Raw Data
+ReDim Preserve AccruedData(iTotalAccruedData, 3)
+For iAccruedDataRowLooper = 1 To iTotalAccruedData
+    
+    If Range("B" & iAccruedDataRowLooper).Value = sResellerName Then
+        
+        iAccruedDataArrayRowCounter = iAccruedDataArrayRowCounter + 1
+        For iAccruedDataColumnCounter = 1 To 3
+            
+            AccruedData(iAccruedDataArrayRowCounter, iAccruedDataColumnCounter) = Range("C" & iAccruedDataRowLooper).Offset(0, iAccruedDataColumnCounter - 1).Value
+        
+        Next iAccruedDataColumnCounter
+    
+    End If
+
+Next iAccruedDataRowLooper
+    
+
+'*******************
+'CREATE THE NEW FILE
+'*******************
+Dim i_Unload_data_row_loop As Integer
+Dim i_Unload_data_col_loop As Integer
+
+st_template = ActiveWorkbook.Name 'Store name of template
+
+Workbooks.Add 'Create the new file
+s_new_file = ActiveWorkbook.Name
+
+Sheets("Sheet1").Name = "Detail"
+Sheets("Sheet2").Name = "Total"
+Sheets("Sheet3").Name = "Accrued Commissions"
+                        
+'***************************
+'UNLOAD DATA TO CREATED FILE
+'***************************
+
+'Unload Incremental Data
+Sheets("Detail").Activate
+
+    'Unload Incremental Headers
+    For i_Unload_data_col_loop = 1 To 55
+    
+        Range("A1").Offset(0, i_Unload_data_col_loop - 1).Value = Incremental_Sales_Headers(1, i_Unload_data_col_loop)
+        
+    Next i_Unload_data_col_loop
+    
+    i_Unload_data_col_loop = 0
+    i_Unload_data_row_loop = 0
+    
+    'unload Incremental raw data
+    For i_Unload_data_row_loop = 1 To Incremental_Array_row_counter
+        
+        For i_Unload_data_col_loop = 1 To 55
+            
+            Range("A2").Offset(i_Unload_data_row_loop - 1, i_Unload_data_col_loop - 1).Value = Incremental_Sales_Data(i_Unload_data_row_loop, i_Unload_data_col_loop)
+        
+        Next i_Unload_data_col_loop
+    
+    Next i_Unload_data_row_loop
+
+'Unload Total Sales Data
+Sheets("Total").Activate
+
+    'Unload Total Sales Headers
+    For i_Unload_data_col_loop = 1 To 27
+        
+        Range("A1").Offset(0, i_Unload_data_col_loop - 1).Value = Total_Sales_Headers(1, i_Unload_data_col_loop)
+    
+    Next i_Unload_data_col_loop
+    
+    i_Unload_data_col_loop = 0
+    i_Unload_data_row_loop = 0
+    
+    'unload Total Sales raw data
+    For i_Unload_data_row_loop = 1 To Total_Array_row_counter
+        
+        For i_Unload_data_col_loop = 1 To 27
+            
+            Range("A2").Offset(i_Unload_data_row_loop - 1, i_Unload_data_col_loop - 1).Value = Total_Sales_Data(i_Unload_data_row_loop, i_Unload_data_col_loop)
+        
+        Next i_Unload_data_col_loop
+    
+    Next i_Unload_data_row_loop
+
+'Unload Accrued Commissions Data
+Sheets("Accrued Commissions").Activate
+    
+    'Unload Accrued Headers"
+        
+        For i_Unload_data_col_loop = 1 To 3
+            Range("A1").Offset(0, i_Unload_data_col_loop - 1).Value = AccruedHeaders(1, i_Unload_data_col_loop)
+        Next i_Unload_data_col_loop
+    
+    'Unload Accrued Raw Data
+        For i_Unload_data_row_loop = 1 To iAccruedDataArrayRowCounter
+            
+            For i_Unload_data_col_loop = 1 To 3
+            
+                Range("A2").Offset(i_Unload_data_row_loop - 1, i_Unload_data_col_loop - 1).Value = AccruedData(i_Unload_data_row_loop, i_Unload_data_col_loop)
+            
+            Next i_Unload_data_col_loop
+        
+        Next i_Unload_data_row_loop
+
+
+'Formatting of Incremental Sales, Total Sales Tabs, and accrued commissions tabs
+
+Dim offset_count As Integer
+'Format Incremental Sheet
+Sheets("Detail").Activate
+offset_count = Range("A1:" & Range("A" & Last_Row).End(xlUp).Address).Count
+
+Dim r_sumrange As String
+
+With Range("A1:" & Range("A1").End(xlToRight).Offset(offset_count - 1, 0).Address)
+    .Select
+    .Font.Size = 10
+    .Font.Name = "calibri"
+    .Borders.LineStyle = xlContinuous
+    .Borders.Weight = xlThin
+    .Borders.ColorIndex = xlAutomatic
+    .HorizontalAlignment = xlCenter
+    .Columns.AutoFit
+End With
+
+Range("BO1").Activate
+Range("A1").Activate
+
+'Format Total Sales
+Sheets("Total").Activate
+offset_count = Range("A1:" & Range("A" & Last_Row).End(xlUp).Address).Count
+
+With Range("A1:" & Range("A1").End(xlToRight).Offset(offset_count - 1, 0).Address)
+    .Select
+    .Font.Size = 10
+    .Font.Name = "calibri"
+    .Borders.LineStyle = xlContinuous
+    .Borders.Weight = xlThin
+    .Borders.ColorIndex = xlAutomatic
+    .HorizontalAlignment = xlCenter
+    .Columns.AutoFit
+End With
+
+'Sum the total residual Payout if there are MRRs
+If Range("A1").End(xlDown).Address <> "$A$" & Last_Row Then
+    
+    Range("AA" & Last_Row).End(xlUp).Offset(1, 0).Value = "=sum(" & Range("AA2:" & Range("AA" & Last_Row).End(xlUp).Address).Address & ")"
+
+Else
+
+    Range("AA" & Last_Row).End(xlUp).Offset(1, 0).Value = 0
+
+End If
+
+Range("BO1").Activate
+Range("A1").Activate
+
+'Format Accrued Commissions Tab
+Sheets("Accrued Commissions").Activate
+
+With Range("A1:" & Range("A" & Last_Row).End(xlUp).Offset(0, 2).Address)
+ .Select
+    .Font.Size = 10
+    .Font.Name = "calibri"
+    .Borders.LineStyle = xlContinuous
+    .Borders.Weight = xlThin
+    .Borders.ColorIndex = xlAutomatic
+    .HorizontalAlignment = xlCenter
+    .Columns.AutoFit
+End With
+
+Range("BO1").Activate
+Range("A1").Activate
+
+End Sub
+
+'Procedure to populate the file location tabs
+Sub StoreToFileLocationTabs(iPartnerID As Long, sCommissionsType As String, sFileLocation As String, sResellerName As String, sResellerType As String)
+
+Call Assign_Sheets.Assign_Sheets
+
+Windows(st_template).Activate 'activate the template
+
+'Populate the file location tab depending on the reseller type
+
+If sResellerType = "Masters" Then
+    
+    ws_File_Location_Master.Activate
+    
+    Range("B" & Last_Row).End(xlUp).Offset(1, 0).Value = sFileLocation 'Populate the File Location column
+    Range("B" & Last_Row).End(xlUp).Offset(0, 1).Value = iPartnerID 'Populate the Partner ID column
+    Range("B" & Last_Row).End(xlUp).Offset(0, 2).Value = sResellerName 'Populate the Reseller Name Column
+    Range("B" & Last_Row).End(xlUp).Offset(0, 3).Value = sCommissionsType 'Populate the Commissions Type Column
+
+Else
+
+    ws_File_Location_Direct.Activate
+    
+    With Range("B" & Last_Row).End(xlUp)
+        .Offset(1, 0).Value = sFileLocation    'Populate the File Location column
+        .Offset(1, 1).Value = iPartnerID 'Populate the Partner ID column
+        .Offset(1, 2).Value = sResellerName 'Populate the Reseller Name Column
+        .Offset(1, 3).Value = sCommissionsType 'Populate the Commissions Type Column
+    End With
+
+End If
+
+End Sub
