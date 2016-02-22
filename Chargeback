@@ -1,0 +1,146 @@
+Option Explicit
+Option Base 1
+
+Sub ChargebackMacro()
+
+Call Assign_Sheets.Assign_Sheets
+
+Dim sCurrentReseller As String
+Dim iRowLooper As Integer
+Dim iTotalNumberofResellers As Integer
+Dim iResellerLooper As Integer
+Dim iChargebackCounter As Integer
+Dim iTotalNumberofChargebacks As Integer
+Dim dChargebackAmount As Double
+Dim sTemplate As String
+Dim iResellerType As Integer
+
+Application.ScreenUpdating = False
+
+sTemplate = ActiveWorkbook.Name
+
+If ws_Chargeback.Range("A1").End(xlDown).Address = "$A$" & Last_Row Then 'Check if chargeback tab is empty
+    
+    MsgBox ("No data found on Chargeback tab")
+    Exit Sub
+
+Else 'Procedure to follow if chargeback tab is not empty
+    
+    ws_Chargeback.Activate 'activate chargeback worksheet
+    iChargebackCounter = 0
+    
+    'count the number of resellers from the pivots tab
+    iTotalNumberofResellers = ws_Pivots.Range("A2:" & ws_Pivots.Range("A" & Last_Row).End(xlUp).Address).Count
+        
+    'looping to add the new chargebacks into the chargeback tab. add the chargeback data temporarily to columns G to I
+    For iResellerLooper = 2 To (iTotalNumberofResellers + 1)
+        
+        ws_Statement.Range("B4").Value = ws_Pivots.Range("A" & iResellerLooper).Value 'assign the name of the reseller from the pivots tab to the statement tab
+        iResellerType = ws_Pivots.Range("B" & iResellerLooper).Value
+        
+        If ws_Statement.Range("B11").Value < 0 And iResellerType = 2 Then 'assign negative values and reseller details temporarily to columns G to I
+            
+            iChargebackCounter = iChargebackCounter + 1
+            Range("G" & iChargebackCounter).Value = ws_Statement.Range("B4").Value 'place name of reseller in column G
+            Range("H" & iChargebackCounter).Value = ws_Statement.Range("B5").Value 'place date on column H
+            Range("I" & iChargebackCounter).Value = ws_Statement.Range("B11").Value 'place chargeback value on column I
+        
+        End If
+    
+    Next iResellerLooper
+        
+    ws_Chargeback.Activate 'activate the chargeback tab
+    
+    'count the number of chargeback rows present in the chargeback tab
+    iTotalNumberofChargebacks = Range("A2:" & Range("A" & Last_Row).End(xlUp).Address).Count
+    
+    'turn off screen updating
+    Application.ScreenUpdating = False
+      
+      'looping to reduce the amount of chargebacks based on the positive amount of commissions created
+      For iResellerLooper = 2 To (iTotalNumberofResellers + 1)
+      
+          ws_Statement.Range("B4").Value = ws_Pivots.Range("A" & iResellerLooper).Value 'assign value of reseller to Statement tab
+          sCurrentReseller = ws_Statement.Range("B4").Value  'assign name of current reseller name to sCurrentReseller variable
+          
+          'condition to add or minus the chargeback. check if the reseller has non-zero chargeback
+          If ws_Statement.Range("B10").Value <> 0 Then
+          
+              'if chargeback is non-zero, negate the chargeback then add to the first row containing the resellers name
+              dChargebackAmount = ws_Statement.Range("B10").Value 'assign the chargeback value to dChargebackAmount variable
+                  
+              For iRowLooper = 2 To iTotalNumberofChargebacks 'loop to cycle to the row where the chargeback will be added
+                  
+                  If Range("A" & iRowLooper).Value = sCurrentReseller Then 'test if the reseller name in the row is the same as in the stat tab
+                      
+                      If dChargebackAmount < 0 Then 'test if chargeback is present
+                          
+                          dChargebackAmount = dChargebackAmount - Range("C" & iRowLooper).Value 'formula to get the chargeback value after subtracting the positive bookings
+                          
+                          With Range("D" & iRowLooper) 'place the new chargeback value in column d of the row
+                              .Value = dChargebackAmount
+                              .NumberFormat = "##0.##"
+                          End With
+                          
+                     End If
+                     
+                  End If
+              
+              Next iRowLooper
+              
+          End If 'End of chargeback test procedure
+          
+      Next iResellerLooper
+    
+        With Range("G1:" & Range("G" & Last_Row).End(xlUp).Offset(0, 2).Address) 'copy the details of reselleres with chargeback
+          .Select
+          .copy
+        End With
+        
+        With Range("A" & Last_Row).End(xlUp).Offset(1, 0) 'paste the details of the resellers with chargebacks to column A
+          .Select
+          .PasteSpecial xlPasteValues
+        End With
+        
+        Range("A2:C2").copy 'copy the number formatting to the whole chargeback sheet
+        With Range("A2:" & Range("A2").End(xlDown).Offset(0, 2).Address)
+          .Select
+          .PasteSpecial xlPasteFormats
+        End With
+        
+        With Range("G1:" & Range("G" & Last_Row).End(xlUp).Offset(0, 2).Address) 'remove the temporary storage of the chargeback data from column G to I
+          .Select
+          .ClearContents
+        End With
+        
+        For iRowLooper = 2 To iTotalNumberofChargebacks 'loop to place the new chargeback value after reducing the chargeback
+                
+            If Range("D" & iRowLooper).Value > 0 Then 'test if there is still a chargeback value to be placed
+                
+                Range("C" & iRowLooper).Value = -Range("D" & iRowLooper).Value ' place the new chargeback value to column c of the row
+            
+            End If
+            
+        Next iRowLooper
+      
+      Application.DisplayAlerts = False
+      
+      Range("A1:" & Range("A" & Last_Row).End(xlUp).Offset(0, 3).Address).AutoFilter field:=4, Criteria1:="<=0", Operator:=xlAnd 'filter for the chargebacks that been paid off by the reseller
+      Range("A2:" & Range("A" & Last_Row).End(xlUp).Offset(0, 3).Address).SpecialCells(xlCellTypeVisible).Delete 'delete the chargebacks that have been paid off already
+      Range("A1:" & Range("A" & Last_Row).End(xlUp).Offset(0, 3).Address).AutoFilter
+      Range("D:D").ClearContents 'remove the values used in column D
+      
+      Application.DisplayAlerts = True
+      
+      Range("A" & Last_Row).End(xlUp).Select
+    
+      Application.ScreenUpdating = True
+
+      Beep
+      MsgBox ("Chargeback Update Done!")
+        
+    
+End If
+
+End Sub
+
