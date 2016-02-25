@@ -388,11 +388,6 @@ Else
                     lResidualSumOfMrr = ws_Residual.Range("B15").Value 'get the sum of the MRR of the reseller
                     lResidualMinimumPayout = ws_Residual.Range("B13").Value 'Get the minimum payout of the reseller
                    
-                    
-                    If sResidualCurrentReseller = "Eagle Point Technology, Inc." Or sResidualCurrentReseller = "Laser Connection LLC" Or sResidualCurrentReseller = "Our Local IT LLC" Then
-                        MsgBox (sResidualCurrentReseller & ":" & lResidualMinimumPayout & ":" & iResidualResellerRowLooper)
-                    End If
-                            
                     On Error Resume Next
                         iPartnerID = ws_Residual.Range("B16").Value 'Get the partner ID of the reseller
                         
@@ -462,10 +457,6 @@ Else
                                 
                                 Range("B11").Value = 0
                             
-                            End If
-                            
-                            If sResidualCurrentReseller = "Eagle Point Technology, Inc." Or sResidualCurrentReseller = "Laser Connection LLC" Or sResidualCurrentReseller = "Our Local IT LLC" Then
-                            MsgBox (sResidualCurrentReseller & ":" & lTotalPayout & ":" & Range("B11").Value & ":" & lResidualMinimumPayout)
                             End If
                             
                             'Remove validation and several condition checks
