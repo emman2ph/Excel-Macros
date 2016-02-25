@@ -378,18 +378,21 @@ Else
                  ws_Residual.Activate
                 
                 For iResidualResellerRowLooper = 2 To (iResidualTotalLoopToBePerformed + 1) 'since the first row in pivots tab is the column headers
-                
-                    lResidualMinimumMrr = ws_Residual.Range("B14").Value 'get the minimum MRR requirement for that reseller
-                    lResidualSumOfMrr = ws_Residual.Range("B15").Value 'get the sum of the MRR of the reseller
-                    lResidualMinimumPayout = ws_Residual.Range("B13").Value 'Get the minimum payout of the reseller
-                   
-                
+              
                     sResidualCurrentReseller = ws_Pivots.Range("E" & iResidualResellerRowLooper).Value 'assignment of the reseller name to the variable
                     ws_Residual.Range("B4").Value = sResidualCurrentReseller 'assign current reseller as Statement Reseller
                     iResidualResellerType = ws_Pivots.Range("F" & iResidualResellerRowLooper).Value 'Get the Reseller Type from the Pivots tab
                     sResidualResellerMasterIndicator = ws_Pivots.Range("G" & iResidualResellerRowLooper).Value 'Get the reseller Master? value from the pivots tab
                     sResellerWithReducedFields = ws_Pivots.Range("H" & iResidualResellerRowLooper).Value 'Get the reseller with Reduced Fields? value from the pivots tab
+                    lResidualMinimumMrr = ws_Residual.Range("B14").Value 'get the minimum MRR requirement for that reseller
+                    lResidualSumOfMrr = ws_Residual.Range("B15").Value 'get the sum of the MRR of the reseller
+                    lResidualMinimumPayout = ws_Residual.Range("B13").Value 'Get the minimum payout of the reseller
+                   
                     
+                    If sResidualCurrentReseller = "Eagle Point Technology, Inc." Or sResidualCurrentReseller = "Laser Connection LLC" Or sResidualCurrentReseller = "Our Local IT LLC" Then
+                        MsgBox (sResidualCurrentReseller & ":" & lResidualMinimumPayout & ":" & iResidualResellerRowLooper)
+                    End If
+                            
                     On Error Resume Next
                         iPartnerID = ws_Residual.Range("B16").Value 'Get the partner ID of the reseller
                         
@@ -449,6 +452,8 @@ Else
                             
                             lTotalPayout = Range("B7").Value + Range("B9").Value
                             
+                            
+                            
                             If lTotalPayout >= lResidualMinimumPayout Then
                             
                                 Range("B11").Value = "=B7+B9"
@@ -457,6 +462,10 @@ Else
                                 
                                 Range("B11").Value = 0
                             
+                            End If
+                            
+                            If sResidualCurrentReseller = "Eagle Point Technology, Inc." Or sResidualCurrentReseller = "Laser Connection LLC" Or sResidualCurrentReseller = "Our Local IT LLC" Then
+                            MsgBox (sResidualCurrentReseller & ":" & lTotalPayout & ":" & Range("B11").Value & ":" & lResidualMinimumPayout)
                             End If
                             
                             'Remove validation and several condition checks
