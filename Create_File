@@ -141,7 +141,7 @@ Else
                     If ws_Pivots.Range("C" & i_reseller_row_looper).Value = "Y" Then 'FOR MASTER RESELLER FILE GENERATION
                                                                                                                                 '**********************************
                                                                                                                                 
-                        If ws_Statement.Range("B8").Value >= ws_Statement.Range("B14") Then
+                        If ws_Statement.Range("B11").Value >= ws_Statement.Range("B14") Then
                          
                             Call Create_reseller_file_master(s_current_reseller, "A") 'Get raw data and create file
                             
@@ -378,18 +378,16 @@ Else
                  ws_Residual.Activate
                 
                 For iResidualResellerRowLooper = 2 To (iResidualTotalLoopToBePerformed + 1) 'since the first row in pivots tab is the column headers
-                
-                    lResidualMinimumMrr = ws_Residual.Range("B14").Value 'get the minimum MRR requirement for that reseller
-                    lResidualSumOfMrr = ws_Residual.Range("B15").Value 'get the sum of the MRR of the reseller
-                    lResidualMinimumPayout = ws_Residual.Range("B13").Value 'Get the minimum payout of the reseller
-                   
-                
+              
                     sResidualCurrentReseller = ws_Pivots.Range("E" & iResidualResellerRowLooper).Value 'assignment of the reseller name to the variable
                     ws_Residual.Range("B4").Value = sResidualCurrentReseller 'assign current reseller as Statement Reseller
                     iResidualResellerType = ws_Pivots.Range("F" & iResidualResellerRowLooper).Value 'Get the Reseller Type from the Pivots tab
                     sResidualResellerMasterIndicator = ws_Pivots.Range("G" & iResidualResellerRowLooper).Value 'Get the reseller Master? value from the pivots tab
                     sResellerWithReducedFields = ws_Pivots.Range("H" & iResidualResellerRowLooper).Value 'Get the reseller with Reduced Fields? value from the pivots tab
-                    
+                    lResidualMinimumMrr = ws_Residual.Range("B14").Value 'get the minimum MRR requirement for that reseller
+                    lResidualSumOfMrr = ws_Residual.Range("B15").Value 'get the sum of the MRR of the reseller
+                    lResidualMinimumPayout = ws_Residual.Range("B13").Value 'Get the minimum payout of the reseller
+                   
                     On Error Resume Next
                         iPartnerID = ws_Residual.Range("B16").Value 'Get the partner ID of the reseller
                         
@@ -448,6 +446,8 @@ Else
                             lTotalPayout = 0
                             
                             lTotalPayout = Range("B7").Value + Range("B9").Value
+                            
+                            
                             
                             If lTotalPayout >= lResidualMinimumPayout Then
                             
