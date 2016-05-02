@@ -1,5 +1,7 @@
 Option Explicit
 Option Base 1
+Public sTemplate As String
+Public sNewFileName As String
 
 'For New Masters, Please do manual update in the offsheet. This procedure only works for the new direct resellers
 
@@ -15,6 +17,9 @@ Dim iCountOfResellersInStatementList As Integer
 Dim iCountOfResellersInResidualList As Integer
 Dim rngResellerListUpfrontOffsheet  As Range
 Dim wsUseThisStatementWorksheet As Worksheet
+Dim s_month As String
+Dim NewWorkbook As Workbook
+Dim InitialSaveName As String
 
 sTemplate = ActiveWorkbook.Name
 Call Assign_Sheets.Assign_Sheets
@@ -32,9 +37,45 @@ sDate = Left(ws_Statement.Range("B5").Value, 3) 'Get the month code
 Call FillOffSheetTabs(iCountOfResellersInStatementList, ColumnLetter(sDate), ws_Statement, "A")
 Call FillOffSheetTabs(iCountOfResellersInResidualList, ColumnLetter(sDate), ws_Residual, "E")
 
-'Sum quarterly values
+'Save Offsheet file
+s_month = ws_Statement.Range("B5").Value
+sTemplate = ActiveWorkbook.Name
+s_month = ws_Statement.Range("B5").Value
+
+Set NewWorkbook = Workbooks.Add
+
+Application.DisplayAlerts = True
+
+sNewFileName = ActiveWorkbook.Name
+
+Windows(sTemplate).Activate
+
+Application.ScreenUpdating = True
 
 
+    
+ws_Offsheet_Upfront.Copy Before:=NewWorkbook.Sheets("Sheet1")
+ws_Offsheet_Residual.Copy Before:=NewWorkbook.Sheets("Sheet1")
+ws_Offsheet_Chargeback.Copy Before:=NewWorkbook.Sheets("Sheet1")
+Application.DisplayAlerts = False
+Sheets("sheet1").Delete
+Sheets("sheet2").Delete
+Sheets("sheet3").Delete
+Application.DisplayAlerts = True
+InitialSaveName = Application.GetSaveAsFilename(InitialFileName:="Offsheet - " & s_month)
+
+
+Windows(sNewFileName).Activate
+
+On Error Resume Next
+    
+    ActiveWorkbook.SaveAs filename:=InitialSaveName & "xlsx"
+
+If Err.Number <> 0 Then
+    
+    Exit Sub
+
+End If
 
 
 
@@ -67,7 +108,7 @@ Range("D1:" & Range("A" & Last_Row).End(xlUp).Offset(0, 3).Address).AutoFilter f
 
         With Range("A2:" & Range("A" & Last_Row).End(xlUp).Address) 'copy the visible cells after filter
             .SpecialCells xlCellTypeVisible
-            .copy
+            .Copy
         End With
         
         'Copy to the Upfront Tab
@@ -99,7 +140,7 @@ Range("I1:" & Range("E" & Last_Row).End(xlUp).Offset(0, 4).Address).AutoFilter f
     
         With Range("E2:" & Range("E" & Last_Row).End(xlUp).Address) 'copy the visible cells after filter
             .SpecialCells xlCellTypeVisible
-            .copy
+            .Copy
         End With
         
         'Copy to the Upfront Tab
@@ -366,4 +407,5 @@ Sub quarterlySum(offsheetSheetName As String, loopCount As Integer)
 
 
 End Sub
+
 
