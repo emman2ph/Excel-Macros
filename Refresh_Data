@@ -30,12 +30,49 @@ Dim s_Direct_Agents As String
     
     'Refresh formulas
     
+    '///EDIT
+    Range("BL2").FormulaR1C1 = "=IF(RC[-63]=""Sales Agent Program"",TRUE,FALSE)"
+    Range("BM2").FormulaR1C1 = "=IF(RC[-1]=TRUE,IF(RC[-62]=RC[-36],TRUE,FALSE),TRUE)"
+    Range("BN2").FormulaR1C1 = _
+        "=IF(AND(RC[-65]=""Sandler Partners"",RC[-56]=""Upgrade"",RC[-31]=""Office"",MONTH(RC[-57])=MONTH(TODAY())-1,RC[-11]>=24),1,0)"
+    '///EDIT
+    
+    
     If Range("B2").End(xlDown).Address <> "$B$" & Last_Row Then
     
     Range("A2:" & Range("B" & Last_Row).End(xlUp).Offset(0, -1).Address).FillDown 'Fill Column A
-    Range("BE2:" & Range("B" & Last_Row).End(xlUp).Offset(0, 61).Address).FillDown 'Fill Column BE to BJ
+    Range("BE2:" & Range("B" & Last_Row).End(xlUp).Offset(0, 64).Address).FillDown 'Fill Column BE to BN
     
     End If
+    
+'*** Sales Agent Program on Sheets: Incremental Sales and Total Sales
+'*** update them --> Partner should equal Campaign
+Dim iPlacer As Long
+Dim iEndRow As Long
+Dim iBoolean As String
+
+    iEndRow = Cells(Rows.Count, "B").End(xlUp).Row
+
+        '*** Partner Column C to Campaign Column AC
+    For iPlacer = 1 To iEndRow
+        iBoolean = Range("BM" & iPlacer).Text
+        If iBoolean = "FALSE" Then
+            Range("AC" & iPlacer).Value = Range("C" & iPlacer).Value
+        End If
+    Next iPlacer
+        
+
+iPlacer = 0
+iEndRow = 0
+
+    Columns("BN:BN").Select
+    Selection.Copy
+    Selection.PasteSpecial Paste:=xlPasteValues, Operation:=xlNone, SkipBlanks _
+        :=False, Transpose:=False
+    Application.CutCopyMode = False
+    
+Range("BL:BM").ClearContents
+
 
 'Refresh Total Sales List
     
@@ -45,6 +82,13 @@ Dim s_Direct_Agents As String
     End With
     
     s_Direct_Agents = ws_Multiplier.Range("A:A").Find("Direct Agents:").Address & ":" & ws_Multiplier.Range("A" & Last_Row).End(xlUp).Offset(0, 21).Address
+    
+    '///EDIT
+    Range("AT2").FormulaR1C1 = "=IF(RC[-45]=""Sales Agent Program"",TRUE,FALSE)"
+    Range("AU2").FormulaR1C1 = "=IF(RC[-1]=TRUE,IF(RC[-44]=RC[-43],TRUE,FALSE),TRUE)"
+    '///EDIT
+    
+    Range("AT2:" & Range("B" & Last_Row).End(xlUp).Offset(0, 45).Address).FillDown 'Fill Column AT to AU
     
     If Range("B2").End(xlDown).Address <> "$B$" & Last_Row Then
         
@@ -60,6 +104,23 @@ Dim s_Direct_Agents As String
         '*******************************************************************************************************************************************************************************
     
     End If
+
+    iEndRow = Cells(Rows.Count, "B").End(xlUp).Row
+
+        '*** Partner Column C to Campaign Column AC
+    For iPlacer = 1 To iEndRow
+        iBoolean = Range("AU" & iPlacer).Text
+        If iBoolean = "FALSE" Then
+            Range("D" & iPlacer).Value = Range("C" & iPlacer).Value
+        End If
+    Next iPlacer
+    
+iPlacer = 0
+iEndRow = 0
+Range("AT:AU").ClearContents
+'*** Sales Agent Program on Sheets: Incremental Sales and Total Sales
+'*** update them --> Partner should equal Campaign
+
 
 'Create Reseller List
 
@@ -188,6 +249,9 @@ Dim s_Direct_Agents As String
          .ShowError = True
      End With
      
+
+
+
     'Resume calculation
     Application.Calculation = xlCalculationAutomatic
        
@@ -198,8 +262,10 @@ Dim s_Direct_Agents As String
         .Value = ws_Pivots.Range("A2").Value
         .Select
     End With
-    
-    
+
+
+
+
 Application.ScreenUpdating = True
     
     'Error checking for resellers that are not properly tagged in the multiplier tables
@@ -265,7 +331,7 @@ Application.Calculation = xlCalculationManual
                 
                     With Range("A2:" & Range("B" & Last_Row).End(xlUp).Offset(0, -1).Address)
                         .SpecialCells xlCellTypeVisible
-                        .copy
+                        .Copy
                     End With
                     
                     iCopyConfirm = 1
@@ -280,7 +346,7 @@ Application.Calculation = xlCalculationManual
                         
                         With Range("C2:" & Range("B" & Last_Row).End(xlUp).Offset(0, 1).Address)
                             .SpecialCells xlCellTypeVisible
-                            .copy
+                            .Copy
                         End With
                         
                         iCopyConfirm = 1
@@ -293,7 +359,7 @@ Application.Calculation = xlCalculationManual
                     
                         With Range("C2:" & Range("B" & Last_Row).End(xlUp).Offset(0, 1).Address)
                             .SpecialCells xlCellTypeVisible
-                            .copy
+                            .Copy
                         End With
                         
                         iCopyConfirm = 1
@@ -308,7 +374,7 @@ Application.Calculation = xlCalculationManual
                     
                     With Range("A2:" & Range("B" & Last_Row).End(xlUp).Offset(0, -1).Address)
                         .SpecialCells xlCellTypeVisible
-                        .copy
+                        .Copy
                     End With
                     
                     iCopyConfirm = 1
@@ -323,7 +389,7 @@ Application.Calculation = xlCalculationManual
                         
                         With Range("AC2:" & Range("B" & Last_Row).End(xlUp).Offset(0, 27).Address) 'Get Campaign names from Incremental Tab
                             .SpecialCells xlCellTypeVisible
-                            .copy
+                            .Copy
                         End With
                         
                         iCopyConfirm = 1
@@ -336,7 +402,7 @@ Application.Calculation = xlCalculationManual
                     
                          With Range("D2:" & Range("B" & Last_Row).End(xlUp).Offset(0, 2).Address) 'Get Campaign names from Total Sales Tab
                             .SpecialCells xlCellTypeVisible
-                            .copy
+                            .Copy
                         End With
                         
                         iCopyConfirm = 1
@@ -353,7 +419,7 @@ Application.Calculation = xlCalculationManual
                         
                         With Range("A2:" & Range("B" & Last_Row).End(xlUp).Offset(0, -1).Address) 'Get the Master name from the Incremental Sales Tab
                             .SpecialCells xlCellTypeVisible
-                            .copy
+                            .Copy
                         End With
                         
                         iCopyConfirm = 1
@@ -374,7 +440,7 @@ Application.Calculation = xlCalculationManual
                         
                         With Range("AC2:" & Range("B" & Last_Row).End(xlUp).Offset(0, 27).Address) 'Get the Campaign name from the Incremental Sales Tab
                             .SpecialCells xlCellTypeVisible
-                            .copy
+                            .Copy
                         End With
                         
                         iCopyConfirm = 1
@@ -387,7 +453,7 @@ Application.Calculation = xlCalculationManual
                         
                         With Range("A2:" & Range("B" & Last_Row).End(xlUp).Offset(0, -1).Address) 'Get the Master Reseller name
                             .SpecialCells xlCellTypeVisible
-                            .copy
+                            .Copy
                         End With
                         
                         iCopyConfirm = 1
@@ -408,7 +474,7 @@ Application.Calculation = xlCalculationManual
                     
                         With Range("D2:" & Range("B" & Last_Row).End(xlUp).Offset(0, 2).Address) 'Get the campaign name of the reseller
                             .SpecialCells xlCellTypeVisible
-                            .copy
+                            .Copy
                         End With
                         
                         iCopyConfirm = 1
@@ -444,7 +510,11 @@ Application.Calculation = xlCalculationManual
         Next i_Reseller_type_code
         
         Sheet_to_get_list_from.AutoFilterMode = False
-      
+    
+    
+    
 End Sub
+
+
 
 
