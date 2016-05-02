@@ -11,7 +11,7 @@ Sub Create_File_Main()
 Application.ScreenUpdating = False
 
 Call Assign_Sheets.Assign_Sheets
-
+Dim iPlacerPlacer As Long
 '*
 If ws_Total.Range("A1").End(xlDown).Address = "$A$" Or ws_Total.Range("A2").End(xlDown).Address = "$A$" & Last_Row Then 'Check for empty raw data
 
@@ -112,6 +112,12 @@ Else
                 Dim sGeneratedFileSaveName As String 'Variable to store the full filename including the file extension of the generated file
                 Dim sCommissionType As String
                                                                                     
+                '/// EDIT
+                Dim stringlet2 As String
+                Dim charlet As String
+                Dim jPlacerPlacer As Long
+                
+                '/// EDIT
                 st_template = ActiveWorkbook.Name 'Save the name of the template
                 
                 iNumberOfPositiveStatements = 0
@@ -146,7 +152,7 @@ Else
                             Call Create_reseller_file_master(s_current_reseller, "A") 'Get raw data and create file
                             
                             Windows(st_template).Activate
-                            ws_Statement.copy Before:=Workbooks(s_new_file).Sheets("Detail") 'Copy statement sheet to new file
+                            ws_Statement.Copy Before:=Workbooks(s_new_file).Sheets("Detail") 'Copy statement sheet to new file
                             
                             Windows(s_new_file).Activate
                             
@@ -154,7 +160,7 @@ Else
                             
                             'Remove formulas from the statement tab
                             With Range("A1:B11")
-                                .copy
+                                .Copy
                                 .PasteSpecial xlPasteValues
                             End With
                             
@@ -187,10 +193,25 @@ Else
                                 
                                 If Err.Number <> 0 Then
                                     
-                                    Beep
-                                    sNewFileName = Application.InputBox("Reseller Name:" & s_current_reseller & " contains illegal characters. Use a different filename.")
+                                    '/// EDIT
+                                    'Beep
+                                    'sNewFileName = Application.InputBox("Reseller Name:" & s_current_reseller & " contains illegal characters. Use a different filename.")
+                                    'ActiveWorkbook.SaveAs filename:=save_fldr.SelectedItems(1) & "\Masters\" & sNewFileName & "_" & s_month & ".xlsx"
+                                    '/// EDIT
+                                    stringlet2 = ""
+                                    For jPlacerPlacer = 1 To Len(s_current_reseller)
+                                        charlet = Mid(s_current_reseller, jPlacerPlacer, 1)
+                                        If Application.WorksheetFunction.VLookup(Asc(charlet), ws_Ascii.Range("A:B"), 2, False) = True Then
+                                            stringlet2 = stringlet2 & charlet
+                                        Else
+                                            stringlet2 = stringlet2 & "_"
+                                        End If
+                                    Next jPlacerPlacer
+                                    sNewFileName = stringlet2
+                                    'MsgBox sNewFileName
                                     ActiveWorkbook.SaveAs filename:=save_fldr.SelectedItems(1) & "\Masters\" & sNewFileName & "_" & s_month & ".xlsx"
-                                
+                                    stringlet2 = ""
+                                    
                                 End If
                             
                             On Error GoTo 0
@@ -212,7 +233,7 @@ Else
                             Call Create_reseller_file_master(s_current_reseller, "C") 'indicate which column to look at from the incremental list
                             
                             Windows(st_template).Activate
-                            ws_Statement.copy Before:=Workbooks(s_new_file).Sheets("Detail") 'Copy statement sheet to new file
+                            ws_Statement.Copy Before:=Workbooks(s_new_file).Sheets("Detail") 'Copy statement sheet to new file
                             
                             Windows(s_new_file).Activate
                             
@@ -220,7 +241,7 @@ Else
                             
                             'Remove formulas from the statement tab
                             With Range("A1:B11")
-                                .copy
+                                .Copy
                                 .PasteSpecial xlPasteValues
                             End With
                             
@@ -330,9 +351,26 @@ Else
                                 
                                 If Err.Number <> 0 Then 'Ask the user for a new file name if the reseller name contains invalid characters and cannot be saved
                                     
-                                    Beep
-                                    sNewFileName = Application.InputBox("Reseller Name:" & s_current_reseller & " contains illegal characters. Use a different filename.")
+                                    '/// EDIT
+                                    'Beep
+                                    'sNewFileName = Application.InputBox("Reseller Name:" & s_current_reseller & " contains illegal characters. Use a different filename.")
+                                    'ActiveWorkbook.SaveAs filename:=s_fileSaveLocation & sNewFileName & "_" & s_month & ".xlsx"
+                                    '/// EDIT
+                                    
+                                    
+                                    stringlet2 = ""
+                                    For jPlacerPlacer = 1 To Len(s_current_reseller)
+                                        charlet = Mid(s_current_reseller, jPlacerPlacer, 1)
+                                        If Application.WorksheetFunction.VLookup(Asc(charlet), ws_Ascii.Range("A:B"), 2, False) = True Then
+                                            stringlet2 = stringlet2 & charlet
+                                        Else
+                                            stringlet2 = stringlet2 & "_"
+                                        End If
+                                    Next jPlacerPlacer
+                                    sNewFileName = stringlet2
+                                    'MsgBox sNewFileName
                                     ActiveWorkbook.SaveAs filename:=s_fileSaveLocation & sNewFileName & "_" & s_month & ".xlsx"
+                                    stringlet2 = ""
     
                                 End If
                                 
@@ -418,7 +456,7 @@ Else
                             End If
                             
                             Windows(st_template).Activate
-                            ws_Residual.copy Before:=Workbooks(s_new_file).Sheets("Detail") 'Copy statement sheet to new file
+                            ws_Residual.Copy Before:=Workbooks(s_new_file).Sheets("Detail") 'Copy statement sheet to new file
                             
                             Windows(s_new_file).Activate
                             
@@ -426,7 +464,7 @@ Else
                             
                             'Remove formulas from the Residual Only tab
                             With Range("A1:B11")
-                                .copy
+                                .Copy
                                 .PasteSpecial xlPasteValues
                             End With
                             
@@ -474,10 +512,25 @@ Else
                                         ActiveWorkbook.SaveAs filename:=save_fldr.SelectedItems(1) & "\Masters\" & sResidualCurrentReseller & "_" & s_month & ".xlsx"
                                     
                                         If Err.Number <> 0 Then 'Ask the user for a new file name if the reseller name contains invalid characters and cannot be saved
-    
-                                            Beep
-                                            sNewFileName = Application.InputBox("Reseller Name:" & s_current_reseller & " contains illegal characters. Use a different filename.")
+                                            '/// EDIT
+                                            'Beep
+                                            'sNewFileName = Application.InputBox("Reseller Name:" & s_current_reseller & " contains illegal characters. Use a different filename.")
+                                            'ActiveWorkbook.SaveAs filename:=save_fldr.SelectedItems(1) & "\Masters\" & sNewFileName & "_" & s_month & ".xlsx"
+                                            '/// EDIT
+                                            
+                                            stringlet2 = ""
+                                            For jPlacerPlacer = 1 To Len(s_current_reseller)
+                                                charlet = Mid(s_current_reseller, jPlacerPlacer, 1)
+                                                If Application.WorksheetFunction.VLookup(Asc(charlet), ws_Ascii.Range("A:B"), 2, False) = True Then
+                                                    stringlet2 = stringlet2 & charlet
+                                                Else
+                                                    stringlet2 = stringlet2 & "_"
+                                                End If
+                                            Next jPlacerPlacer
+                                            sNewFileName = stringlet2
+                                            'MsgBox sNewFileName
                                             ActiveWorkbook.SaveAs filename:=save_fldr.SelectedItems(1) & "\Masters\" & sNewFileName & "_" & s_month & ".xlsx"
+                                            stringlet2 = ""
     
                                         End If
                                         
@@ -520,10 +573,26 @@ Else
                                         End If
                                         
                                         If Err.Number <> 0 Then 'Ask the user for a new file name if the reseller name contains invalid characters and cannot be saved
-    
-                                            Beep
-                                            sNewFileName = Application.InputBox("Reseller Name:" & sResidualCurrentReseller & " contains illegal characters. Use a different filename.")
+                                            '/// EDIT
+                                            'Beep
+                                            'sNewFileName = Application.InputBox("Reseller Name:" & sResidualCurrentReseller & " contains illegal characters. Use a different filename.")
+                                            'ActiveWorkbook.SaveAs filename:=s_fileSaveLocation & sNewFileName & "_" & s_month & ".xlsx"
+                                            '/// EDIT
+                                            
+                                            
+                                            stringlet2 = ""
+                                            For jPlacerPlacer = 1 To Len(s_current_reseller)
+                                                charlet = Mid(s_current_reseller, jPlacerPlacer, 1)
+                                                If Application.WorksheetFunction.VLookup(Asc(charlet), ws_Ascii.Range("A:B"), 2, False) = True Then
+                                                    stringlet2 = stringlet2 & charlet
+                                                Else
+                                                    stringlet2 = stringlet2 & "_"
+                                                End If
+                                            Next jPlacerPlacer
+                                            sNewFileName = stringlet2
+                                            'MsgBox sNewFileName
                                             ActiveWorkbook.SaveAs filename:=s_fileSaveLocation & sNewFileName & "_" & s_month & ".xlsx"
+                                            stringlet2 = ""
     
                                         End If
     
